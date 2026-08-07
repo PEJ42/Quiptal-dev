@@ -1,0 +1,44 @@
+# Dependencies and builds
+/node_modules/
+/.next/
+/out/
+/build/
+/coverage/
+/test-results/
+*.tsbuildinfo
+
+# Keep the safe example only
+.env*
+!.env.example
+
+# Local data and protected business files
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+/prisma/*.db
+/uploads/
+/storage/uploads/
+/storage/contracts/
+/generated-contracts/
+/private-reference/
+
+# Generated artifacts and logs
+/src/generated/prisma/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Tooling and OS metadata
+.DS_Store
+.vercel/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+*.pem
