@@ -3,6 +3,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["@prisma/adapter-better-sqlite3", "better-sqlite3"],
+  experimental: {
+    serverActions: {
+      // The application permits 5 MB catalog images; allow multipart form overhead as well.
+      bodySizeLimit: "6mb",
+    },
+  },
   async headers() {
     return [
       {
