@@ -14,7 +14,7 @@ Next.js App Router, React, TypeScript, Tailwind, Prisma with SQLite locally and 
 
 ## Prerequisites and planned commands
 
-Use nvm and enter the project with `nvm use`, then npm. Available commands are `dev`, `build`, `start`, `lint`, `format`, `format:check`, `typecheck`, `test`, `test:watch`, `test:e2e`, `db:generate`, `db:migrate`, `db:seed`, and `db:studio`.
+Use nvm and enter the project with `nvm use`, then npm. Available commands are `dev`, `build`, `start`, `lint`, `format`, `format:check`, `typecheck`, `test`, `test:watch`, `test:e2e`, `db:generate`, `db:migrate`, `db:seed`, `db:seed:production`, and `db:studio`.
 
 ## Safety
 

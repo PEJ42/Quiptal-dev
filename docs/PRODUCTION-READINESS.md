@@ -22,7 +22,7 @@ Do not deploy this version to serverless, edge, or multiple concurrent applicati
 2. Provision a single host and persistent data volume; copy neither fictional seed data nor local `.env` files to production.
 3. Set the production `DATABASE_URL` and `APP_DATA_DIR`, then install dependencies with `npm ci`.
 4. Generate Prisma client with `npm run db:generate`.
-5. Apply reviewed migrations using `npx prisma migrate deploy`.
+5. Apply reviewed migrations using `npx prisma migrate deploy`, then run `npm run db:seed:production` to add only reference configuration. Never run `npm run db:seed` in production because it creates fictional catalog and customer data.
 6. Run `npm run build`, then start with `npm run start` behind HTTPS.
 7. Create the first Admin through `/setup`; never seed a production password.
 8. Confirm sign-in, a booking read, a protected contract download, and a backup restore on a staging copy.
@@ -34,6 +34,7 @@ Do not deploy this version to serverless, edge, or multiple concurrent applicati
 - [ ] `APP_DATA_DIR` points to durable storage outside the source checkout.
 - [ ] The database and private contract directory are excluded from source control and web-served paths.
 - [ ] First Admin is created through setup; no test credentials exist.
+- [ ] Production reference categories, booking statuses/types, services, and contract template are initialized with `npm run db:seed:production`.
 - [ ] Reverse-proxy rate limiting protects `/login` and `/setup`.
 - [ ] Anonymous `/`, `/bookings`, `/catalog`, `/contracts`, and contract-download requests redirect or reject safely.
 - [ ] Product image upload rejects unsupported/oversized files.
