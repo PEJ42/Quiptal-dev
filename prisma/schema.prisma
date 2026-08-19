@@ -212,6 +212,7 @@ model Booking {
   discountCents               Int                @default(0)
   taxCents                    Int                @default(0)
   securityDepositCents        Int                @default(0)
+  securityDepositOverrideCents Int?
   totalCents                  Int                @default(0)
   archivedAt                  DateTime?
   createdAt                   DateTime           @default(now())

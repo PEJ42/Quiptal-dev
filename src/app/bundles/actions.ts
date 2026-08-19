@@ -5,12 +5,14 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { bundleComponentSchema, bundleSchema } from "@/lib/catalog-schema";
+import { dollarsToCents } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { saveCatalogImage } from "@/lib/upload-storage";
 
 function bundleInput(formData: FormData) {
   return bundleSchema.safeParse({
     ...Object.fromEntries(formData),
+    fixedRentalCents: dollarsToCents(formData.get("fixedRentalDollars")),
     isTaxable: formData.get("isTaxable") === "on",
   });
 }
@@ -59,9 +61,7 @@ export async function updateBundle(formData: FormData) {
       ...(imageReference ? { imageReference } : {}),
     },
   });
-  revalidatePath("/bundles");
-  revalidatePath("/catalog");
-  revalidatePath(`/bundles/${id}`);
+  redirect("/catalog?view=bundles");
 }
 export async function addBundleComponent(formData: FormData) {
   await requireAdmin();

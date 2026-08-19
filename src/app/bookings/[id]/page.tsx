@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { requireAdmin } from "@/lib/auth";
+import { centsToDollars } from "@/lib/money";
+import { recommendedSecurityDepositCents, replacementValueCents } from "@/lib/pricing";
 import { prisma } from "@/lib/prisma";
 import { generateContract } from "@/app/contracts/actions";
 import {
@@ -32,6 +34,9 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
     prisma.bookingStatus.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
   ]);
   if (!booking) notFound();
+  const replacementValue = replacementValueCents(booking.lines);
+  const recommendedDeposit = recommendedSecurityDepositCents(booking.lines);
+  const isAutomaticDeposit = booking.securityDepositOverrideCents === null;
   const sourceOptions = [
     ...products.map((item) => ({ ...item, kind: "PRODUCT" })),
     ...bundles.map((item) => ({ ...item, kind: "BUNDLE" })),
@@ -179,7 +184,12 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
           <dt className="font-semibold">Total</dt>
           <dd className="font-semibold">${(booking.totalCents / 100).toFixed(2)}</dd>
         </dl>
-        <form action={updateBookingPricing} className="mt-5 grid gap-2 sm:grid-cols-4">
+        <p className="mt-4 text-sm text-slate-600">
+          {isAutomaticDeposit
+            ? `Automatic: 60% of $${centsToDollars(replacementValue)} replacement value.`
+            : `Custom deposit override. Automatic recommendation: $${centsToDollars(recommendedDeposit)}.`}
+        </p>
+        <form action={updateBookingPricing} className="mt-5 grid gap-2 sm:grid-cols-5">
           <input name="bookingId" type="hidden" value={id} />
           <select
             className="rounded border p-2 text-sm"
@@ -205,11 +215,22 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
             name="taxRateBasisPoints"
             type="number"
           />
+          <select
+            className="rounded border p-2 text-sm"
+            defaultValue={isAutomaticDeposit ? "AUTO" : "OVERRIDE"}
+            name="securityDepositMode"
+          >
+            <option value="AUTO">Automatic deposit</option>
+            <option value="OVERRIDE">Custom deposit</option>
+          </select>
           <input
             className="rounded border p-2 text-sm"
-            defaultValue={booking.securityDepositCents}
+            defaultValue={centsToDollars(
+              booking.securityDepositOverrideCents ?? recommendedDeposit,
+            )}
             min="0"
-            name="securityDepositCents"
+            name="securityDepositOverrideDollars"
+            step="0.01"
             type="number"
           />
           <button className="secondary-button w-fit">Update pricing</button>

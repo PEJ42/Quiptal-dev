@@ -19,7 +19,6 @@ export const bookingSchema = z
     discountType: z.enum(["FIXED", "PERCENT"]).optional(),
     discountValue: z.coerce.number().int().min(0).max(100_000_000).default(0),
     taxRateBasisPoints: z.coerce.number().int().min(0).max(10_000),
-    securityDepositCents: z.coerce.number().int().min(0).max(100_000_000),
   })
   .refine((value) => value.endDate >= value.startDate, {
     message: "End date cannot be before start date.",

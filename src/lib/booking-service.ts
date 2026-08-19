@@ -1,11 +1,16 @@
 import { prisma } from "@/lib/prisma";
-import { calculateBookingPricing } from "@/lib/pricing";
+import { calculateBookingPricing, recommendedSecurityDepositCents } from "@/lib/pricing";
 
 export async function recalculateBooking(bookingId: string) {
   const [booking, lines] = await Promise.all([
     prisma.booking.findUniqueOrThrow({ where: { id: bookingId } }),
-    prisma.bookingLine.findMany({ where: { bookingId } }),
+    prisma.bookingLine.findMany({
+      where: { bookingId },
+      include: { bundleComponentSnapshots: true },
+    }),
   ]);
+  const securityDepositCents =
+    booking.securityDepositOverrideCents ?? recommendedSecurityDepositCents(lines);
   const pricing = calculateBookingPricing({
     lines: lines.map((line) => ({
       quantity: line.quantity,
@@ -16,7 +21,7 @@ export async function recalculateBooking(bookingId: string) {
       ? { type: booking.discountType as "FIXED" | "PERCENT", value: booking.discountValue }
       : null,
     taxRateBasisPoints: booking.taxRateBasisPoints,
-    securityDepositCents: booking.securityDepositCents,
+    securityDepositCents,
   });
   await prisma.$transaction([
     ...lines.map((line) =>

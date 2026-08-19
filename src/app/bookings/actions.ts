@@ -5,6 +5,7 @@ import { z } from "zod";
 import { addBookingActivity, recalculateBooking } from "@/lib/booking-service";
 import { bookingDate, bookingSchema } from "@/lib/booking-schema";
 import { requireAdmin } from "@/lib/auth";
+import { dollarsToCents } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 
 function bookingNumber() {
@@ -38,6 +39,8 @@ export async function createBooking(formData: FormData) {
       billingPostalCodeSnapshot: customer.postalCode,
       billingCountrySnapshot: customer.country,
       bookingNumber: bookingNumber(),
+      securityDepositCents: 0,
+      securityDepositOverrideCents: null,
     },
   });
   await recalculateBooking(booking.id);
@@ -174,19 +177,25 @@ export async function updateBookingPricing(formData: FormData) {
     .min(0)
     .max(10_000)
     .parse(formData.get("taxRateBasisPoints"));
-  const securityDepositCents = z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(100_000_000)
-    .parse(formData.get("securityDepositCents"));
+  const securityDepositMode = z
+    .enum(["AUTO", "OVERRIDE"])
+    .parse(formData.get("securityDepositMode"));
+  const securityDepositOverrideCents =
+    securityDepositMode === "OVERRIDE"
+      ? z.coerce
+          .number()
+          .int()
+          .min(0)
+          .max(100_000_000)
+          .parse(dollarsToCents(formData.get("securityDepositOverrideDollars")))
+      : null;
   await prisma.booking.update({
     where: { id: bookingId },
     data: {
       discountType: discountType || null,
       discountValue,
       taxRateBasisPoints,
-      securityDepositCents,
+      securityDepositOverrideCents,
     },
   });
   await recalculateBooking(bookingId);

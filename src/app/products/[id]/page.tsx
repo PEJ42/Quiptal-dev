@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { catalogImageConstraints } from "@/lib/upload-storage";
+import { centsToDollars } from "@/lib/money";
 import { toggleProduct, updateProduct } from "../actions";
 
 export default async function ProductPage({
@@ -80,22 +81,24 @@ export default async function ProductPage({
           </select>
         </label>
         <label className="text-sm">
-          Default rental price (cents)
+          Default rental price ($)
           <input
             className="mt-1 w-full rounded border p-2"
-            defaultValue={product.defaultRentalCents}
-            name="defaultRentalCents"
+            defaultValue={centsToDollars(product.defaultRentalCents)}
+            name="defaultRentalDollars"
+            step="0.01"
             min="0"
             required
             type="number"
           />
         </label>
         <label className="text-sm">
-          Replacement cost (cents)
+          Replacement cost ($)
           <input
             className="mt-1 w-full rounded border p-2"
-            defaultValue={product.replacementCostCents ?? ""}
-            name="replacementCostCents"
+            defaultValue={centsToDollars(product.replacementCostCents)}
+            name="replacementCostDollars"
+            step="0.01"
             min="0"
             type="number"
           />

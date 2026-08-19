@@ -5,14 +5,18 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { productSchema } from "@/lib/catalog-schema";
+import { dollarsToCents } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { saveCatalogImage } from "@/lib/upload-storage";
 
 function productInput(formData: FormData) {
   return productSchema.safeParse({
     ...Object.fromEntries(formData),
+    defaultRentalCents: dollarsToCents(formData.get("defaultRentalDollars")),
+    replacementCostCents: formData.get("replacementCostDollars")
+      ? dollarsToCents(formData.get("replacementCostDollars"))
+      : undefined,
     isTaxable: formData.get("isTaxable") === "on",
-    replacementCostCents: formData.get("replacementCostCents") || undefined,
   });
 }
 
@@ -57,9 +61,7 @@ export async function updateProduct(formData: FormData) {
     },
     where: { id },
   });
-  revalidatePath("/products");
-  revalidatePath("/catalog");
-  revalidatePath(`/products/${id}`);
+  redirect("/catalog?view=products");
 }
 
 export async function toggleProduct(formData: FormData) {

@@ -100,17 +100,6 @@ export default async function NewBookingPage({
             />
           </label>
           <label className="text-sm">
-            Security deposit (cents)
-            <input
-              className="mt-1 w-full rounded border p-2"
-              name="securityDepositCents"
-              defaultValue="0"
-              min="0"
-              required
-              type="number"
-            />
-          </label>
-          <label className="text-sm">
             Discount type
             <select className="mt-1 w-full rounded border p-2" name="discountType">
               <option value="">None</option>

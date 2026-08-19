@@ -49,10 +49,11 @@ export default async function NewBundlePage({
             <textarea className="mt-1 w-full rounded border p-2" name="description" />
           </label>
           <label className="text-sm">
-            Fixed rental price (cents)
+            Fixed rental price ($)
             <input
               className="mt-1 w-full rounded border p-2"
-              name="fixedRentalCents"
+              name="fixedRentalDollars"
+              step="0.01"
               min="0"
               required
               type="number"

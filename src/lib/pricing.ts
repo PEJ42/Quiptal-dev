@@ -1,5 +1,31 @@
 export type PricingLine = { quantity: number; unitPriceCents: number; taxable: boolean };
 export type Discount = { type: "FIXED" | "PERCENT"; value: number } | null;
+export type ReplacementValueLine = {
+  quantity: number;
+  replacementCostCentsSnapshot: number | null;
+  bundleComponentSnapshots: {
+    quantityPerBundle: number;
+    replacementCostCentsSnapshot: number | null;
+  }[];
+};
+
+export function replacementValueCents(lines: ReplacementValueLine[]) {
+  return lines.reduce((total, line) => {
+    const lineReplacementValue = line.bundleComponentSnapshots.length
+      ? line.bundleComponentSnapshots.reduce(
+          (bundleTotal, component) =>
+            bundleTotal +
+            component.quantityPerBundle * (component.replacementCostCentsSnapshot ?? 0),
+          0,
+        )
+      : (line.replacementCostCentsSnapshot ?? 0);
+    return total + line.quantity * lineReplacementValue;
+  }, 0);
+}
+
+export function recommendedSecurityDepositCents(lines: ReplacementValueLine[]) {
+  return Math.round(replacementValueCents(lines) * 0.6);
+}
 
 export function lineSubtotalCents(line: PricingLine) {
   return line.quantity * line.unitPriceCents;

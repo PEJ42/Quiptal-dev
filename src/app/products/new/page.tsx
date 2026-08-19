@@ -57,20 +57,22 @@ export default async function NewProductPage({
           </select>
         </label>
         <label className="text-sm">
-          Default rental price (cents)
+          Default rental price ($)
           <input
             className="mt-1 w-full rounded border p-2"
-            name="defaultRentalCents"
+            name="defaultRentalDollars"
+            step="0.01"
             min="0"
             required
             type="number"
           />
         </label>
         <label className="text-sm">
-          Replacement cost (cents)
+          Replacement cost ($)
           <input
             className="mt-1 w-full rounded border p-2"
-            name="replacementCostCents"
+            name="replacementCostDollars"
+            step="0.01"
             min="0"
             type="number"
           />

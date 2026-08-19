@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { calculateBookingPricing } from "@/lib/pricing";
+import {
+  calculateBookingPricing,
+  recommendedSecurityDepositCents,
+  replacementValueCents,
+} from "@/lib/pricing";
 
 describe("calculateBookingPricing", () => {
   it("allocates fixed discounts before tax and keeps deposits separate", () => {
@@ -30,5 +34,28 @@ describe("calculateBookingPricing", () => {
       securityDepositCents: 2_000,
     });
     expect(pricing.totalCents - pricing.securityDepositCents).toBe(5_000);
+  });
+});
+
+describe("replacement-value deposits", () => {
+  it("uses product and bundle component snapshots to recommend 60 percent", () => {
+    const lines = [
+      {
+        quantity: 2,
+        replacementCostCentsSnapshot: 50_000,
+        bundleComponentSnapshots: [],
+      },
+      {
+        quantity: 3,
+        replacementCostCentsSnapshot: null,
+        bundleComponentSnapshots: [
+          { quantityPerBundle: 1, replacementCostCentsSnapshot: 20_000 },
+          { quantityPerBundle: 2, replacementCostCentsSnapshot: 5_000 },
+        ],
+      },
+    ];
+
+    expect(replacementValueCents(lines)).toBe(190_000);
+    expect(recommendedSecurityDepositCents(lines)).toBe(114_000);
   });
 });
