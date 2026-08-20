@@ -14,20 +14,40 @@ export default async function ContractsPage() {
   ]);
   return (
     <AppShell activeItem="Contracts">
-      <h1 className="text-2xl font-semibold">Contracts</h1>
-      {template && (
-        <section className="mt-6 rounded border bg-white p-5">
-          <h2 className="font-semibold">Contract template</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Version {template.version}. Existing generated contracts preserve a snapshot of each
-            version.
+      <header className="page-header">
+        <div>
+          <p className="page-kicker">Documents</p>
+          <h1 className="page-title">Contracts</h1>
+          <p className="page-subtitle">
+            Maintain the contract template and access every generated booking agreement.
           </p>
-          <form action={saveContractTemplate} className="mt-4 grid max-w-3xl gap-3">
+        </div>
+        <span className="rounded-full bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
+          {contracts.length} {contracts.length === 1 ? "contract" : "contracts"}
+        </span>
+      </header>
+      {template && (
+        <section className="section-card mt-7">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Contract template</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Changes create the next version for future contracts only.
+              </p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+              Version {template.version}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-slate-600">
+            Existing generated contracts preserve a snapshot of the version used to create them.
+          </p>
+          <form action={saveContractTemplate} className="form-card mt-5 grid max-w-3xl gap-4">
             <input name="id" type="hidden" value={template.id} />
             <label className="text-sm">
               Title
               <input
-                className="mt-1 w-full rounded border p-2"
+                className="mt-1 w-full border p-2"
                 defaultValue={template.title}
                 name="title"
                 required
@@ -36,7 +56,7 @@ export default async function ContractsPage() {
             <label className="text-sm">
               Legal terms
               <textarea
-                className="mt-1 min-h-64 w-full rounded border p-2"
+                className="mt-1 min-h-64 w-full border p-2"
                 defaultValue={template.legalTerms}
                 name="legalTerms"
                 required
@@ -45,31 +65,50 @@ export default async function ContractsPage() {
             <label className="text-sm">
               Footer text
               <input
-                className="mt-1 w-full rounded border p-2"
+                className="mt-1 w-full border p-2"
                 defaultValue={template.footerText ?? ""}
                 name="footerText"
               />
             </label>
-            <button className="w-fit rounded bg-slate-900 px-4 py-2 text-sm text-white">
-              Save new template version
-            </button>
+            <button className="primary-button w-fit">Save new template version</button>
           </form>
         </section>
       )}
-      <section className="mt-6 rounded border bg-white p-5">
-        <h2 className="font-semibold">Generated contracts</h2>
-        <div className="mt-4 space-y-3">
+      <section className="section-card mt-7 overflow-hidden p-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Generated contracts</h2>
+            <p className="mt-1 text-sm text-slate-500">Newest documents appear first.</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+            {contracts.length}
+          </span>
+        </div>
+        <div>
           {contracts.length === 0 ? (
-            <p className="text-sm text-slate-600">No contracts generated yet.</p>
+            <div className="px-6 py-12 text-center">
+              <p className="text-base font-semibold text-slate-800">No contracts generated yet.</p>
+              <p className="mt-2 text-sm text-slate-500">
+                Generate a contract from a booking when it is ready to send.
+              </p>
+            </div>
           ) : (
             contracts.map((contract) => (
-              <div className="flex justify-between border-b pb-3 text-sm" key={contract.id}>
-                <span>
-                  {contract.booking.bookingNumber} · {contract.booking.customer.firstName}{" "}
-                  {contract.booking.customer.lastName} · version {contract.version}
-                </span>
-                <a className="underline" href={`/api/contracts/${contract.id}`}>
-                  Download
+              <div
+                className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-5 py-4 last:border-0 sm:px-6"
+                key={contract.id}
+              >
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-900">
+                    {contract.booking.customer.firstName} {contract.booking.customer.lastName}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {contract.booking.bookingNumber} · Version {contract.version} · Generated{" "}
+                    {contract.generatedAt.toISOString().slice(0, 10)}
+                  </p>
+                </div>
+                <a className="secondary-button shrink-0" href={`/api/contracts/${contract.id}`}>
+                  Download PDF
                 </a>
               </div>
             ))
