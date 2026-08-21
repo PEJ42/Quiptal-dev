@@ -1,14 +1,29 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { readFile } from "fs/promises";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { addBookingActivity } from "@/lib/booking-service";
 import { renderContractPdf, storeContract } from "@/lib/contracts";
 import { requireAdmin } from "@/lib/auth";
+import { companyLogosDirectory } from "@/lib/app-storage";
+import { contractTermsPlainText, sanitizeContractTerms } from "@/lib/contract-terms";
 import { prisma } from "@/lib/prisma";
 
 const address = (...parts: (string | null | undefined)[]) => parts.filter(Boolean).join(", ");
+
+async function companyLogo(reference: string | null | undefined) {
+  if (!reference || !/^[a-f0-9-]{36}\.(jpg|png)$/.test(reference)) return null;
+  try {
+    return {
+      bytes: new Uint8Array(await readFile(`${companyLogosDirectory}/${reference}`)),
+      format: reference.endsWith(".png") ? ("png" as const) : ("jpg" as const),
+    };
+  } catch {
+    return null;
+  }
+}
 
 export async function generateContract(formData: FormData) {
   const user = await requireAdmin();
@@ -27,6 +42,7 @@ export async function generateContract(formData: FormData) {
   ]);
   if (!booking || !template) redirect(`/bookings/${bookingId}?error=contract`);
   const version = (await prisma.generatedContract.count({ where: { bookingId } })) + 1;
+  const logo = await companyLogo(settings?.logoReference);
   const bytes = await renderContractPdf({
     company: {
       name: settings?.name || "Rental Business",
@@ -41,6 +57,7 @@ export async function generateContract(formData: FormData) {
       phone: settings?.phone,
       email: settings?.email,
     },
+    companyLogo: logo,
     booking: {
       number: booking.bookingNumber,
       title: booking.title,
@@ -116,7 +133,10 @@ export async function saveContractTemplate(formData: FormData) {
   await requireAdmin();
   const id = z.string().cuid().parse(formData.get("id"));
   const title = z.string().trim().min(1).max(160).parse(formData.get("title"));
-  const legalTerms = z.string().trim().min(1).max(20_000).parse(formData.get("legalTerms"));
+  const legalTerms = sanitizeContractTerms(
+    z.string().max(20_000).parse(formData.get("legalTerms")),
+  );
+  z.string().trim().min(1).max(20_000).parse(contractTermsPlainText(legalTerms));
   const footerText = z
     .string()
     .trim()

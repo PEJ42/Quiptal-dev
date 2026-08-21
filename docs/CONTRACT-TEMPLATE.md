@@ -10,6 +10,6 @@ Generated versions use booking/template snapshots, protected non-guessable stora
 
 ## Implemented editor and versioning
 
-Admins can edit the active template's title, legal terms, and footer at `/contracts`. Saving increments its version. Generating from a booking writes a new immutable generated-contract record that snapshots all template text, booking values, line items, components, and calculated totals. Existing versions are never overwritten.
+Admins can edit the active template's title, legal terms, and footer at `/contracts`. The legal-terms editor supports paragraphs, bold text, and unordered bullet lists; only this limited formatting is retained and rendered in generated PDFs. Saving increments its version. Generating from a booking writes a new immutable generated-contract record that snapshots all template text, booking values, line items, components, and calculated totals. Existing versions are never overwritten.
 
 PDF files are stored outside public static assets under an opaque UUID filename. Downloads flow through an authenticated route, use a friendly attachment filename, are marked private/no-store, and record a download activity event.

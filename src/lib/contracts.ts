@@ -2,9 +2,11 @@ import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { contractsDirectory } from "@/lib/app-storage";
+import { contractTermsToBlocks, contractTermsToRuns } from "@/lib/contract-terms";
 
 export type ContractViewModel = {
   company: { name: string; address: string; phone?: string | null; email?: string | null };
+  companyLogo?: { bytes: Uint8Array; format: "jpg" | "png" } | null;
   booking: {
     number: string;
     title?: string | null;
@@ -74,6 +76,53 @@ export async function renderContractPdf(model: ContractViewModel) {
   };
   const paragraph = (value: string, size = 10) =>
     wrap(value, width - margin * 2, size).forEach((line) => text(line, size));
+  const richParagraph = (value: string, size = 9, bullet = false) => {
+    const startX = margin + (bullet ? 14 : 0);
+    const maxX = width - margin;
+    const lineHeight = size + 5;
+    let x = startX;
+    let lineStarted = false;
+    if (bullet) page.drawText("•", { x: margin, y, size, font });
+
+    for (const run of contractTermsToRuns(value)) {
+      const selectedFont = run.bold ? bold : font;
+      for (const part of run.text.replace(/\s+/g, " ").split(/(\s+)/)) {
+        if (!part) continue;
+        const partWidth = selectedFont.widthOfTextAtSize(part, size);
+        if (x + partWidth > maxX && lineStarted) {
+          y -= lineHeight;
+          if (y < margin + 24) newPage();
+          x = startX;
+          lineStarted = false;
+        }
+        if (y < margin + 24) newPage();
+        page.drawText(part, { x, y, size, font: selectedFont });
+        x += partWidth;
+        lineStarted = true;
+      }
+    }
+    y -= lineHeight + 3;
+  };
+  if (model.companyLogo) {
+    try {
+      const logo =
+        model.companyLogo.format === "png"
+          ? await pdf.embedPng(model.companyLogo.bytes)
+          : await pdf.embedJpg(model.companyLogo.bytes);
+      const scale = Math.min(120 / logo.width, 64 / logo.height, 1);
+      const logoWidth = logo.width * scale;
+      const logoHeight = logo.height * scale;
+      page.drawImage(logo, {
+        x: width - margin - logoWidth,
+        y: y - logoHeight,
+        width: logoWidth,
+        height: logoHeight,
+      });
+      y = Math.min(y, height - margin - logoHeight - 8);
+    } catch {
+      // A corrupt stored logo must not prevent a contract from being generated.
+    }
+  }
   text(model.company.name, 18, true);
   paragraph(
     [model.company.address, model.company.phone, model.company.email].filter(Boolean).join(" · "),
@@ -128,7 +177,9 @@ export async function renderContractPdf(model: ContractViewModel) {
   text(`Refundable security deposit: ${cents(model.totals.securityDepositCents)}`, 10);
   y -= 10;
   text("Rental agreement terms", 12, true);
-  paragraph(model.legalTerms, 9);
+  contractTermsToBlocks(model.legalTerms).forEach((block) =>
+    richParagraph(block.html, 9, block.kind === "bullet"),
+  );
   y -= 8;
   text("Customer acceptance", 11, true);
   paragraph(

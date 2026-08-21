@@ -45,6 +45,7 @@ model CompanySettings {
   phone                    String?
   email                    String?
   website                  String?
+  logoReference            String?
   timezone                 String   @default("America/Denver")
   currency                 String   @default("USD")
   defaultTaxRateBasisPoints Int     @default(0)

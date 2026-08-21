@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { saveCompanyLogo } from "@/lib/upload-storage";
 
 const companySchema = z.object({
   name: z.string().trim().max(120).optional(),
@@ -32,10 +33,12 @@ export async function saveCompanySettings(formData: FormData) {
   const parsed = companySchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data = parsed.data;
+  const logo = formData.get("logo");
+  const logoReference = await saveCompanyLogo(logo instanceof File ? logo : null);
   await prisma.companySettings.upsert({
     where: { id: "default" },
-    update: data,
-    create: { id: "default", ...data },
+    update: { ...data, ...(logoReference ? { logoReference } : {}) },
+    create: { id: "default", ...data, ...(logoReference ? { logoReference } : {}) },
   });
   revalidatePath("/settings");
 }

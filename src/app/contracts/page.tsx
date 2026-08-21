@@ -1,5 +1,7 @@
 import { AppShell } from "@/components/app-shell";
+import { ContractTermsEditor } from "@/components/contract-terms-editor";
 import { requireAdmin } from "@/lib/auth";
+import { contractTermsToEditorHtml } from "@/lib/contract-terms";
 import { prisma } from "@/lib/prisma";
 import { saveContractTemplate } from "./actions";
 
@@ -53,15 +55,12 @@ export default async function ContractsPage() {
                 required
               />
             </label>
-            <label className="text-sm">
-              Legal terms
-              <textarea
-                className="mt-1 min-h-64 w-full border p-2"
-                defaultValue={template.legalTerms}
-                name="legalTerms"
-                required
-              />
-            </label>
+            <div>
+              <p className="text-sm font-medium text-slate-700">Legal terms</p>
+              <div className="mt-1">
+                <ContractTermsEditor initialHtml={contractTermsToEditorHtml(template.legalTerms)} />
+              </div>
+            </div>
             <label className="text-sm">
               Footer text
               <input

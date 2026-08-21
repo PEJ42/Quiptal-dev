@@ -142,7 +142,30 @@ export async function removeBookingLine(formData: FormData) {
   const user = await requireAdmin();
   const id = z.string().cuid().parse(formData.get("id"));
   const bookingId = z.string().cuid().parse(formData.get("bookingId"));
-  await prisma.bookingLine.delete({ where: { id } });
+  const removed = await prisma.$transaction(async (tx) => {
+    const line = await tx.bookingLine.findFirst({
+      where: { id, bookingId },
+      select: { id: true },
+    });
+    if (!line) return false;
+
+    await tx.bookingBundleComponentSnapshot.deleteMany({ where: { bookingLineId: id } });
+    await tx.bookingLine.delete({ where: { id } });
+
+    const remainingLines = await tx.bookingLine.findMany({
+      where: { bookingId },
+      orderBy: { displayOrder: "asc" },
+      select: { id: true },
+    });
+    for (const [displayOrder, remainingLine] of remainingLines.entries()) {
+      await tx.bookingLine.update({ where: { id: remainingLine.id }, data: { displayOrder } });
+    }
+    return true;
+  });
+  if (!removed) {
+    revalidatePath(`/bookings/${bookingId}`);
+    return;
+  }
   await recalculateBooking(bookingId);
   await addBookingActivity(bookingId, user.id, "LINE_REMOVED", "Booking line removed");
   revalidatePath(`/bookings/${bookingId}`);
