@@ -11,25 +11,39 @@ export async function recalculateBooking(bookingId: string) {
   ]);
   // A previous version could create a bundle line with a zero price. Repair only
   // those affected lines; existing non-zero booking snapshots stay unchanged.
-  const zeroPricedBundleSourceIds = lines
-    .filter(
-      (line) => line.lineType === "BUNDLE" && line.unitPriceCents === 0 && line.sourceCatalogId,
-    )
-    .map((line) => line.sourceCatalogId as string);
-  const currentBundlePrices = zeroPricedBundleSourceIds.length
+  const zeroPricedBundleLines = lines.filter(
+    (line) => line.lineType === "BUNDLE" && line.unitPriceCents === 0,
+  );
+  const zeroPricedBundleSourceIds = zeroPricedBundleLines.flatMap((line) =>
+    line.sourceCatalogId ? [line.sourceCatalogId] : [],
+  );
+  const zeroPricedBundleNames = zeroPricedBundleLines.map((line) => line.snapshotName);
+  const currentBundles = zeroPricedBundleLines.length
     ? await prisma.bundle.findMany({
-        where: { id: { in: zeroPricedBundleSourceIds } },
-        select: { id: true, fixedRentalCents: true },
+        where: {
+          OR: [{ id: { in: zeroPricedBundleSourceIds } }, { name: { in: zeroPricedBundleNames } }],
+        },
+        select: { id: true, name: true, fixedRentalCents: true },
       })
     : [];
   const bundlePriceById = new Map(
-    currentBundlePrices.map((bundle) => [bundle.id, bundle.fixedRentalCents]),
+    currentBundles.map((bundle) => [bundle.id, bundle.fixedRentalCents]),
+  );
+  const bundlePriceByName = new Map(
+    currentBundles.map((bundle) => [bundle.name, bundle.fixedRentalCents]),
   );
   const pricedLines = lines.map((line) => {
     const repairedUnitPriceCents =
       line.lineType === "BUNDLE" && line.unitPriceCents === 0 && line.sourceCatalogId
-        ? (bundlePriceById.get(line.sourceCatalogId) ?? line.unitPriceCents)
-        : line.unitPriceCents;
+        ? (bundlePriceById.get(line.sourceCatalogId) ??
+          bundlePriceByName.get(line.snapshotName) ??
+          line.lineSubtotalCents ??
+          line.unitPriceCents)
+        : line.lineType === "BUNDLE" && line.unitPriceCents === 0
+          ? (bundlePriceByName.get(line.snapshotName) ??
+            line.lineSubtotalCents ??
+            line.unitPriceCents)
+          : line.unitPriceCents;
     return { ...line, unitPriceCents: repairedUnitPriceCents };
   });
   const securityDepositCents =

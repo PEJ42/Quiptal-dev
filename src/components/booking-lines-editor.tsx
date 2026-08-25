@@ -53,82 +53,90 @@ export function BookingLinesEditor({
             No products or bundles have been added yet.
           </p>
         ) : (
-          <form action={saveBookingLineQuantities} className="space-y-3">
-            <input name="bookingId" type="hidden" value={bookingId} />
-            {lines.map((line) => {
-              const isProduct = line.lineType === "PRODUCT";
-              const isBundle = line.lineType === "BUNDLE";
-              return (
-                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4" key={line.id}>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <b className="text-slate-900">{line.snapshotName}</b>
-                        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500">
-                          {line.lineType.toLowerCase()}
-                        </span>
+          <>
+            <form action={saveBookingLineQuantities} id="booking-quantity-form">
+              <input name="bookingId" type="hidden" value={bookingId} />
+            </form>
+            <div className="space-y-3">
+              {lines.map((line) => {
+                const isProduct = line.lineType === "PRODUCT";
+                const isBundle = line.lineType === "BUNDLE";
+                return (
+                  <div className="rounded-xl border border-slate-100 bg-slate-50 p-4" key={line.id}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <b className="text-slate-900">{line.snapshotName}</b>
+                          <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500">
+                            {line.lineType.toLowerCase()}
+                          </span>
+                        </div>
+                        {line.bundleComponentSnapshots.length > 0 && (
+                          <p className="mt-1 text-xs text-slate-600">
+                            {line.bundleComponentSnapshots
+                              .map(
+                                (component) =>
+                                  `${component.productNameSnapshot} × ${component.quantityPerBundle}`,
+                              )
+                              .join(", ")}
+                          </p>
+                        )}
+                        {isBundle && (
+                          <p className="mt-1 text-xs text-slate-600">
+                            Fixed bundle price: {currency(line.unitPriceCents)}
+                          </p>
+                        )}
                       </div>
-                      {line.bundleComponentSnapshots.length > 0 && (
-                        <p className="mt-1 text-xs text-slate-600">
-                          {line.bundleComponentSnapshots
-                            .map(
-                              (component) =>
-                                `${component.productNameSnapshot} × ${component.quantityPerBundle}`,
-                            )
-                            .join(", ")}
+                      <div className="text-right text-sm">
+                        <p className="font-semibold text-slate-900">
+                          {currency(line.lineSubtotalCents)}
                         </p>
-                      )}
-                      {isBundle && (
-                        <p className="mt-1 text-xs text-slate-600">
-                          Fixed bundle price: {currency(line.unitPriceCents)}
-                        </p>
-                      )}
+                        {!isProduct && (
+                          <p className="mt-1 text-xs text-slate-500">Fixed quantity</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-right text-sm">
-                      <p className="font-semibold text-slate-900">
-                        {currency(line.lineSubtotalCents)}
-                      </p>
-                      {!isProduct && <p className="mt-1 text-xs text-slate-500">Fixed quantity</p>}
+                    <div className="mt-3 flex flex-wrap items-end justify-between gap-3 border-t border-slate-200 pt-3">
+                      {isProduct ? (
+                        <label className="grid gap-1 text-xs font-medium text-slate-600">
+                          Quantity
+                          <input
+                            className="w-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                            defaultValue={line.quantity}
+                            form="booking-quantity-form"
+                            min="1"
+                            name={`quantity:${line.id}`}
+                            type="number"
+                          />
+                        </label>
+                      ) : (
+                        <span className="text-xs text-slate-500">
+                          {isBundle
+                            ? "Bundle quantities are fixed at one per booking line."
+                            : "Service quantity is fixed."}
+                        </span>
+                      )}
+                      <form action={removeBookingLine}>
+                        <input name="bookingId" type="hidden" value={bookingId} />
+                        <input name="id" type="hidden" value={line.id} />
+                        <button
+                          className="text-sm font-medium text-red-700 hover:text-red-800"
+                          type="submit"
+                        >
+                          Remove
+                        </button>
+                      </form>
                     </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-end justify-between gap-3 border-t border-slate-200 pt-3">
-                    {isProduct ? (
-                      <label className="grid gap-1 text-xs font-medium text-slate-600">
-                        Quantity
-                        <input
-                          className="w-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                          defaultValue={line.quantity}
-                          min="1"
-                          name={`quantity:${line.id}`}
-                          type="number"
-                        />
-                      </label>
-                    ) : (
-                      <span className="text-xs text-slate-500">
-                        {isBundle
-                          ? "Bundle quantities are fixed at one per booking line."
-                          : "Service quantity is fixed."}
-                      </span>
-                    )}
-                    <button
-                      className="text-sm font-medium text-red-700 hover:text-red-800"
-                      formAction={removeBookingLine}
-                      name="id"
-                      type="submit"
-                      value={line.id}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
             {lines.some((line) => line.lineType === "PRODUCT") && (
-              <button className="primary-button" type="submit">
+              <button className="primary-button mt-4" form="booking-quantity-form" type="submit">
                 Save quantities
               </button>
             )}
-          </form>
+          </>
         )}
       </div>
 
