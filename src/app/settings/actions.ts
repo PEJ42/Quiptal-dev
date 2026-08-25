@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -15,8 +16,8 @@ const companySchema = z.object({
   postalCode: z.string().trim().max(24).optional(),
   country: z.string().trim().max(80).optional(),
   phone: z.string().trim().max(32).optional(),
-  email: z.string().trim().pipe(z.email()).optional().or(z.literal("")),
-  website: z.string().trim().url().optional().or(z.literal("")),
+  email: z.union([z.literal(""), z.string().trim().pipe(z.email())]),
+  website: z.union([z.literal(""), z.string().trim().url()]),
   timezone: z.string().trim().min(1).max(64),
   defaultTaxRateBasisPoints: z.coerce.number().int().min(0).max(10000),
 });
@@ -30,16 +31,49 @@ const serviceSchema = itemSchema.extend({
 
 export async function saveCompanySettings(formData: FormData) {
   await requireAdmin();
-  const parsed = companySchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return;
+  const websiteValue = String(formData.get("website") ?? "").trim();
+  const website =
+    websiteValue && !/^https?:\/\//i.test(websiteValue) ? `https://${websiteValue}` : websiteValue;
+  const parsed = companySchema.safeParse({
+    name: formData.get("name"),
+    addressLine1: formData.get("addressLine1"),
+    addressLine2: formData.get("addressLine2"),
+    city: formData.get("city"),
+    region: formData.get("region"),
+    postalCode: formData.get("postalCode"),
+    country: formData.get("country"),
+    phone: formData.get("phone"),
+    email: formData.get("email"),
+    website,
+    timezone: formData.get("timezone"),
+    defaultTaxRateBasisPoints: formData.get("defaultTaxRateBasisPoints"),
+  });
+  if (!parsed.success) redirect("/settings?error=company");
   const data = parsed.data;
   const logo = formData.get("logo");
-  const logoReference = await saveCompanyLogo(logo instanceof File ? logo : null);
+  let logoReference: string | null;
+  try {
+    logoReference = await saveCompanyLogo(logo instanceof File ? logo : null);
+  } catch {
+    redirect("/settings?error=logo");
+  }
   await prisma.companySettings.upsert({
     where: { id: "default" },
     update: { ...data, ...(logoReference ? { logoReference } : {}) },
     create: { id: "default", ...data, ...(logoReference ? { logoReference } : {}) },
   });
+  revalidatePath("/settings");
+}
+
+export async function updateCategory(formData: FormData) {
+  await requireAdmin();
+  const id = z.string().cuid().parse(formData.get("id"));
+  const name = z.string().trim().min(1).max(100).parse(formData.get("name"));
+  try {
+    await prisma.productCategory.update({ where: { id }, data: { name } });
+  } catch {
+    redirect("/settings?error=category");
+  }
   revalidatePath("/settings");
 }
 

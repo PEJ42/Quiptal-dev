@@ -9,14 +9,23 @@
 
 ## Quality checks
 
-Run these checks before committing changes:
+Run the complete local verification suite before committing changes:
 
 ```bash
-npm run lint
-npm run build
+npm run verify
 ```
 
-`npm run build` is the release-readiness check; it compiles the application and runs Next.js production validation.
+This checks formatting, linting, TypeScript, unit tests, and the production build.
+
+## Server deployment
+
+After pushing `main`, log in to the server as `deploy` and run:
+
+```bash
+deploy-rental-booking
+```
+
+The command fast-forwards the checkout, installs pinned dependencies, regenerates Prisma, applies pending migrations, builds the app, restarts the service, and confirms it is active. Its initial installation is documented in the deployment handoff.
 
 Run the protected-route browser smoke test with:
 

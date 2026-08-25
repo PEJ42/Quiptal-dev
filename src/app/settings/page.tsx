@@ -3,7 +3,12 @@ import { AppShell } from "@/components/app-shell";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { companyLogoConstraints } from "@/lib/upload-storage";
-import { createSettingItem, saveCompanySettings, toggleSettingItem } from "./actions";
+import {
+  createSettingItem,
+  saveCompanySettings,
+  toggleSettingItem,
+  updateCategory,
+} from "./actions";
 
 function ConfigurationList({
   title,
@@ -30,9 +35,28 @@ function ConfigurationList({
       </div>
       <ul className="divide-y divide-slate-100 px-5">
         {items.map((item) => (
-          <li className="flex items-center justify-between gap-4 py-3 text-sm" key={item.id}>
+          <li
+            className="flex flex-wrap items-center justify-between gap-4 py-3 text-sm"
+            key={item.id}
+          >
             <div className="min-w-0">
-              <p className="font-medium text-slate-800">{item.name}</p>
+              {kind === "category" ? (
+                <form action={updateCategory} className="flex flex-wrap items-center gap-2">
+                  <input name="id" type="hidden" value={item.id} />
+                  <input
+                    aria-label={`Category name for ${item.name}`}
+                    className="min-h-9 w-48 rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-800"
+                    defaultValue={item.name}
+                    name="name"
+                    required
+                  />
+                  <button className="text-action" type="submit">
+                    Save
+                  </button>
+                </form>
+              ) : (
+                <p className="font-medium text-slate-800">{item.name}</p>
+              )}
               {(item.description || item.defaultPriceCents !== undefined) && (
                 <p className="mt-0.5 text-xs text-slate-500">
                   {[
@@ -91,8 +115,13 @@ function ConfigurationList({
   );
 }
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   await requireAdmin();
+  const { error } = await searchParams;
   const [company, categories, types, statuses, services] = await Promise.all([
     prisma.companySettings.findUnique({ where: { id: "default" } }),
     prisma.productCategory.findMany({ orderBy: { sortOrder: "asc" } }),
@@ -125,6 +154,15 @@ export default async function SettingsPage() {
           </p>
         </div>
       </header>
+      {error && (
+        <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error === "logo"
+            ? "The logo could not be saved. Use a JPEG or PNG image no larger than 2 MB."
+            : error === "category"
+              ? "The category could not be saved. Category names must be unique."
+              : "Company settings could not be saved. Check the email address and website, then try again."}
+        </p>
+      )}
 
       <section className="section-card mt-7">
         <div className="flex flex-wrap items-start justify-between gap-3">
