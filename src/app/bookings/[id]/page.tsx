@@ -1,22 +1,17 @@
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { BookingLinesEditor } from "@/components/booking-lines-editor";
 import { requireAdmin } from "@/lib/auth";
 import { centsToDollars } from "@/lib/money";
 import { recommendedSecurityDepositCents, replacementValueCents } from "@/lib/pricing";
 import { prisma } from "@/lib/prisma";
 import { generateContract } from "@/app/contracts/actions";
-import {
-  addBookingLine,
-  removeBookingLine,
-  updateBookingLine,
-  updateBookingPricing,
-  updateBookingStatus,
-} from "../actions";
+import { updateBookingPricing, updateBookingStatus } from "../actions";
 
 export default async function BookingPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
   const { id } = await params;
-  const [booking, products, bundles, services, statuses] = await Promise.all([
+  const [booking, products, bundles, statuses] = await Promise.all([
     prisma.booking.findUnique({
       where: { id },
       include: {
@@ -30,18 +25,12 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
     }),
     prisma.product.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" } }),
     prisma.bundle.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" } }),
-    prisma.service.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
     prisma.bookingStatus.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
   ]);
   if (!booking) notFound();
   const replacementValue = replacementValueCents(booking.lines);
   const recommendedDeposit = recommendedSecurityDepositCents(booking.lines);
   const isAutomaticDeposit = booking.securityDepositOverrideCents === null;
-  const sourceOptions = [
-    ...products.map((item) => ({ ...item, kind: "PRODUCT" })),
-    ...bundles.map((item) => ({ ...item, kind: "BUNDLE" })),
-    ...services.map((item) => ({ ...item, kind: "SERVICE" })),
-  ];
   return (
     <AppShell activeItem="Bookings">
       <header className="page-header">
@@ -105,70 +94,12 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
       </section>
       <section className="section-card mt-6">
         <h2 className="text-base font-semibold text-slate-800">Booking lines</h2>
-        <div className="mt-4 space-y-3">
-          {booking.lines.map((line) => (
-            <div className="rounded-lg border border-slate-100 bg-slate-50 p-4" key={line.id}>
-              <div className="flex flex-wrap justify-between gap-2">
-                <b>{line.snapshotName}</b>
-                <span>{line.lineType}</span>
-              </div>
-              {line.bundleComponentSnapshots.length > 0 && (
-                <p className="mt-1 text-xs text-slate-600">
-                  {line.bundleComponentSnapshots
-                    .map(
-                      (component) =>
-                        `${component.productNameSnapshot} × ${component.quantityPerBundle}`,
-                    )
-                    .join(", ")}
-                </p>
-              )}
-              <form action={updateBookingLine} className="mt-2 flex flex-wrap gap-2">
-                <input name="id" type="hidden" value={line.id} />
-                <input name="bookingId" type="hidden" value={id} />
-                <input
-                  className="w-20 rounded border p-1 text-sm"
-                  defaultValue={line.quantity}
-                  min="1"
-                  name="quantity"
-                  type="number"
-                />
-                <input
-                  className="w-32 rounded border p-1 text-sm"
-                  defaultValue={line.unitPriceCents}
-                  min="0"
-                  name="unitPriceCents"
-                  type="number"
-                />
-                <button className="text-action">Save override</button>
-              </form>
-              <form action={removeBookingLine} className="mt-2">
-                <input name="id" type="hidden" value={line.id} />
-                <input name="bookingId" type="hidden" value={id} />
-                <button className="text-action text-red-700 hover:text-red-800">Remove</button>
-              </form>
-            </div>
-          ))}
-        </div>
-        {sourceOptions.length > 0 && (
-          <form action={addBookingLine} className="mt-5 flex flex-wrap gap-2">
-            <input name="bookingId" type="hidden" value={id} />
-            <select className="rounded border p-2 text-sm" name="source">
-              {sourceOptions.map((item) => (
-                <option key={`${item.kind}-${item.id}`} value={`${item.kind}:${item.id}`}>
-                  {item.kind}: {item.name}
-                </option>
-              ))}
-            </select>
-            <input
-              className="w-20 rounded border p-2 text-sm"
-              defaultValue="1"
-              min="1"
-              name="quantity"
-              type="number"
-            />
-            <button className="primary-button">Add line</button>
-          </form>
-        )}
+        <BookingLinesEditor
+          bookingId={id}
+          bundles={bundles}
+          lines={booking.lines}
+          products={products}
+        />
       </section>
       <section className="section-card mt-6">
         <h2 className="text-base font-semibold text-slate-800">Totals</h2>

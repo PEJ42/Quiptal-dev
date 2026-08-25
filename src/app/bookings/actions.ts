@@ -53,7 +53,7 @@ export async function addBookingLine(formData: FormData) {
   const [kindValue, sourceValue] = z.string().parse(formData.get("source")).split(":");
   const kind = z.enum(["PRODUCT", "BUNDLE", "SERVICE"]).parse(kindValue);
   const sourceId = z.string().cuid().parse(sourceValue);
-  const quantity = z.coerce.number().int().min(1).parse(formData.get("quantity"));
+  const requestedQuantity = z.coerce.number().int().min(1).parse(formData.get("quantity"));
   const displayOrder = await prisma.bookingLine.count({ where: { bookingId } });
   if (kind === "PRODUCT") {
     const p = await prisma.product.findUniqueOrThrow({ where: { id: sourceId } });
@@ -64,11 +64,11 @@ export async function addBookingLine(formData: FormData) {
         sourceCatalogId: sourceId,
         snapshotName: p.name,
         snapshotDescription: p.description,
-        quantity,
+        quantity: requestedQuantity,
         unitPriceCents: p.defaultRentalCents,
         taxable: p.isTaxable,
         replacementCostCentsSnapshot: p.replacementCostCents,
-        lineSubtotalCents: quantity * p.defaultRentalCents,
+        lineSubtotalCents: requestedQuantity * p.defaultRentalCents,
         displayOrder,
       },
     });
@@ -82,10 +82,10 @@ export async function addBookingLine(formData: FormData) {
         sourceCatalogId: sourceId,
         snapshotName: s.name,
         snapshotDescription: s.description,
-        quantity,
+        quantity: 1,
         unitPriceCents: s.defaultPriceCents,
         taxable: s.isTaxable,
-        lineSubtotalCents: quantity * s.defaultPriceCents,
+        lineSubtotalCents: s.defaultPriceCents,
         displayOrder,
       },
     });
@@ -102,10 +102,10 @@ export async function addBookingLine(formData: FormData) {
         sourceCatalogId: sourceId,
         snapshotName: b.name,
         snapshotDescription: b.description,
-        quantity,
+        quantity: 1,
         unitPriceCents: b.fixedRentalCents,
         taxable: b.isTaxable,
-        lineSubtotalCents: quantity * b.fixedRentalCents,
+        lineSubtotalCents: b.fixedRentalCents,
         displayOrder,
         bundleComponentSnapshots: {
           create: b.components.map((c) => ({
@@ -121,6 +121,34 @@ export async function addBookingLine(formData: FormData) {
   }
   await recalculateBooking(bookingId);
   await addBookingActivity(bookingId, user.id, "LINE_ADDED", `${kind.toLowerCase()} line added`);
+  revalidatePath(`/bookings/${bookingId}`);
+  revalidatePath("/bookings");
+}
+
+export async function saveBookingLineQuantities(formData: FormData) {
+  const user = await requireAdmin();
+  const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const productLines = await prisma.bookingLine.findMany({
+    where: { bookingId, lineType: "PRODUCT" },
+    select: { id: true, quantity: true, unitPriceCents: true },
+  });
+  const updates = productLines.flatMap((line) => {
+    const rawQuantity = formData.get(`quantity:${line.id}`);
+    if (rawQuantity === null) return [];
+    const quantity = z.coerce.number().int().min(1).max(10_000).parse(rawQuantity);
+    if (quantity === line.quantity) return [];
+    return [
+      prisma.bookingLine.update({
+        where: { id: line.id },
+        data: { quantity, lineSubtotalCents: quantity * line.unitPriceCents },
+      }),
+    ];
+  });
+  if (updates.length) {
+    await prisma.$transaction(updates);
+    await recalculateBooking(bookingId);
+    await addBookingActivity(bookingId, user.id, "LINE_UPDATED", "Product quantities updated");
+  }
   revalidatePath(`/bookings/${bookingId}`);
   revalidatePath("/bookings");
 }
