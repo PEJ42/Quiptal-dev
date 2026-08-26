@@ -6,12 +6,27 @@ import { centsToDollars } from "@/lib/money";
 import { recommendedSecurityDepositCents, replacementValueCents } from "@/lib/pricing";
 import { prisma } from "@/lib/prisma";
 import { generateContract } from "@/app/contracts/actions";
+import {
+  authorizeBookingDeposit,
+  captureBookingDeposit,
+  createCustomerSigningLink,
+  createPaymentLink,
+  refundBookingDeposit,
+  releaseBookingDeposit,
+  revokeSigningLinks,
+} from "../financial-actions";
 import { updateBookingPricing, updateBookingStatus } from "../actions";
 
-export default async function BookingPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function BookingPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ signingLink?: string; error?: string }>;
+}) {
   await requireAdmin();
   const { id } = await params;
-  const [booking, products, bundles, statuses] = await Promise.all([
+  const [booking, products, bundles, statuses, query] = await Promise.all([
     prisma.booking.findUnique({
       where: { id },
       include: {
@@ -21,16 +36,24 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
         lines: { include: { bundleComponentSnapshots: true }, orderBy: { displayOrder: "asc" } },
         activities: { include: { user: true }, orderBy: { createdAt: "desc" } },
         generatedContracts: { orderBy: { version: "desc" } },
+        payments: { orderBy: { createdAt: "desc" } },
+        savedPaymentMethods: { orderBy: { createdAt: "desc" } },
+        depositAuthorizations: { orderBy: { createdAt: "desc" } },
       },
     }),
     prisma.product.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" } }),
     prisma.bundle.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" } }),
     prisma.bookingStatus.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
+    searchParams,
   ]);
   if (!booking) notFound();
   const replacementValue = replacementValueCents(booking.lines);
   const recommendedDeposit = recommendedSecurityDepositCents(booking.lines);
   const isAutomaticDeposit = booking.securityDepositOverrideCents === null;
+  const latestContract = booking.generatedContracts[0];
+  const latestPayment = booking.payments[0];
+  const savedCard = booking.savedPaymentMethods[0];
+  const latestDeposit = booking.depositAuthorizations[0];
   return (
     <AppShell activeItem="Bookings">
       <header className="page-header">
@@ -187,6 +210,122 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
             ))
           )}
         </ul>
+        {latestContract && latestContract.status !== "SIGNED" && (
+          <form action={createCustomerSigningLink} className="mt-4 inline-block">
+            <input name="bookingId" type="hidden" value={id} />
+            <button className="secondary-button">Create signing link</button>
+          </form>
+        )}
+        {query.signingLink && (
+          <p className="mt-4 break-all rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
+            Customer signing link:{" "}
+            {`${process.env.APP_URL || "http://localhost:3000"}/sign/${query.signingLink}`}
+          </p>
+        )}
+        {latestContract && (
+          <p className="mt-3 text-sm text-slate-600">
+            Latest contract: {latestContract.status.replaceAll("_", " ").toLowerCase()}
+            {latestContract.requiresResignature ? " · Changes require a new signature." : ""}
+          </p>
+        )}
+        <form action={revokeSigningLinks} className="mt-3 inline-block">
+          <input name="bookingId" type="hidden" value={id} />
+          <button className="text-action text-red-700">Revoke signing links</button>
+        </form>
+      </section>
+      <section className="section-card mt-6">
+        <h2 className="text-base font-semibold text-slate-800">Rental payment</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          {latestPayment
+            ? `${latestPayment.status.replaceAll("_", " ").toLowerCase()} · $${(latestPayment.amountRequestedCents / 100).toFixed(2)} requested`
+            : "No rental payment link created."}
+        </p>
+        <form action={createPaymentLink} className="mt-4 inline-block">
+          <input name="bookingId" type="hidden" value={id} />
+          <button className="secondary-button">Create payment link</button>
+        </form>
+        {latestPayment?.paymentUrl && (
+          <a
+            className="ml-3 text-action"
+            href={latestPayment.paymentUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Open payment link
+          </a>
+        )}
+      </section>
+      <section className="section-card mt-6">
+        <h2 className="text-base font-semibold text-slate-800">Security deposit</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          {savedCard
+            ? `Card saved: ${savedCard.cardBrand ?? "card"} •••• ${savedCard.cardLast4 ?? ""}`
+            : "No customer card saved yet."}
+        </p>
+        <p className="mt-1 text-sm text-slate-600">
+          {latestDeposit
+            ? `Deposit state: ${latestDeposit.status.replaceAll("_", " ").toLowerCase()}`
+            : "No deposit authorization exists."}
+        </p>
+        {latestDeposit?.authorizationExpiresAt && (
+          <p className="mt-1 text-sm text-amber-700">
+            Authorization expires {latestDeposit.authorizationExpiresAt.toISOString().slice(0, 10)}.
+          </p>
+        )}
+        {!latestDeposit && savedCard && (
+          <form action={authorizeBookingDeposit} className="mt-4">
+            <input name="bookingId" type="hidden" value={id} />
+            <button className="secondary-button">Authorize deposit</button>
+          </form>
+        )}
+        {latestDeposit?.status === "AUTHORIZED" && (
+          <div className="mt-4 flex flex-wrap gap-3">
+            <form action={releaseBookingDeposit}>
+              <input name="bookingId" type="hidden" value={id} />
+              <input name="depositId" type="hidden" value={latestDeposit.id} />
+              <button className="secondary-button">Release deposit hold</button>
+            </form>
+            <form action={captureBookingDeposit} className="flex flex-wrap gap-2">
+              <input name="bookingId" type="hidden" value={id} />
+              <input name="depositId" type="hidden" value={latestDeposit.id} />
+              <input
+                className="w-28 rounded border p-2 text-sm"
+                defaultValue={latestDeposit.amountAuthorizedCents}
+                min="1"
+                name="amountCents"
+                type="number"
+              />
+              <input
+                className="rounded border p-2 text-sm"
+                name="reason"
+                placeholder="Reason for capture"
+                required
+              />
+              <button className="primary-button">Capture deposit</button>
+            </form>
+          </div>
+        )}
+        {(latestDeposit?.status === "CAPTURED" ||
+          latestDeposit?.status === "PARTIALLY_CAPTURED") && (
+          <form action={refundBookingDeposit} className="mt-4 flex flex-wrap gap-2">
+            <input name="bookingId" type="hidden" value={id} />
+            <input name="depositId" type="hidden" value={latestDeposit.id} />
+            <input
+              className="w-28 rounded border p-2 text-sm"
+              defaultValue={latestDeposit.amountCapturedCents}
+              min="1"
+              name="amountCents"
+              type="number"
+            />
+            <input
+              className="rounded border p-2 text-sm"
+              name="reason"
+              placeholder="Reason for refund"
+              required
+            />
+            <button className="secondary-button">Refund deposit</button>
+          </form>
+        )}
       </section>
       <section className="section-card mt-6">
         <h2 className="text-base font-semibold text-slate-800">Activity</h2>

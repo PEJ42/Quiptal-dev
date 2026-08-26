@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "fs/promises";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { contractsDirectory } from "@/lib/app-storage";
 import { contractTermsToBlocks, contractTermsToRuns } from "@/lib/contract-terms";
+import type { ContractSnapshot } from "@/lib/contract-snapshot";
 
 export type ContractViewModel = {
   company: { name: string; address: string; phone?: string | null; email?: string | null };
@@ -26,19 +27,39 @@ export type ContractViewModel = {
     quantity: number;
     unitPriceCents: number;
     subtotalCents: number;
+    replacementValueCents?: number;
     components: string[];
   }[];
   totals: {
     subtotalCents: number;
     discountCents: number;
     taxCents: number;
+    rentalTotalCents?: number;
     totalCents: number;
     securityDepositCents: number;
+    replacementValueCents?: number;
   };
   title: string;
   legalTerms: string;
   footerText?: string | null;
 };
+
+export function contractSnapshotPdfModel(
+  snapshot: ContractSnapshot,
+  companyLogo?: { bytes: Uint8Array; format: "jpg" | "png" } | null,
+): ContractViewModel {
+  return {
+    ...snapshot,
+    companyLogo,
+    lines: snapshot.lines.map((line) => ({
+      ...line,
+      components: line.components.map(
+        (component) =>
+          `${component.name} × ${component.quantity} · replacement $${(component.replacementValueCents / 100).toFixed(2)}`,
+      ),
+    })),
+  };
+}
 
 const cents = (value: number) => `$${(value / 100).toFixed(2)}`;
 const wrap = (text: string, width: number, fontSize: number) => {
@@ -173,8 +194,15 @@ export async function renderContractPdf(model: ContractViewModel) {
   text(`Subtotal: ${cents(model.totals.subtotalCents)}`, 10);
   text(`Discount: -${cents(model.totals.discountCents)}`, 10);
   text(`Tax: ${cents(model.totals.taxCents)}`, 10);
-  text(`Total including taxes: ${cents(model.totals.totalCents)}`, 11, true);
+  text(
+    `Rental total including taxes: ${cents(model.totals.rentalTotalCents ?? model.totals.totalCents - model.totals.securityDepositCents)}`,
+    11,
+    true,
+  );
   text(`Refundable security deposit: ${cents(model.totals.securityDepositCents)}`, 10);
+  if (model.totals.replacementValueCents !== undefined) {
+    text(`Total replacement value: ${cents(model.totals.replacementValueCents)}`, 10);
+  }
   y -= 10;
   text("Rental agreement terms", 12, true);
   contractTermsToBlocks(model.legalTerms).forEach((block) =>

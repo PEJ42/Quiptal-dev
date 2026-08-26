@@ -5,10 +5,11 @@ import { readFile } from "fs/promises";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { addBookingActivity } from "@/lib/booking-service";
-import { renderContractPdf, storeContract } from "@/lib/contracts";
+import { contractSnapshotPdfModel, renderContractPdf, storeContract } from "@/lib/contracts";
 import { requireAdmin } from "@/lib/auth";
 import { companyLogosDirectory } from "@/lib/app-storage";
 import { contractTermsPlainText, sanitizeContractTerms } from "@/lib/contract-terms";
+import { hashContractSnapshot, type ContractSnapshot } from "@/lib/contract-snapshot";
 import { prisma } from "@/lib/prisma";
 
 const address = (...parts: (string | null | undefined)[]) => parts.filter(Boolean).join(", ");
@@ -43,7 +44,32 @@ export async function generateContract(formData: FormData) {
   if (!booking || !template) redirect(`/bookings/${bookingId}?error=contract`);
   const version = (await prisma.generatedContract.count({ where: { bookingId } })) + 1;
   const logo = await companyLogo(settings?.logoReference);
-  const bytes = await renderContractPdf({
+  const lines = booking.lines.map((line) => {
+    const componentReplacementValue = line.bundleComponentSnapshots.reduce(
+      (total, component) =>
+        total + component.quantityPerBundle * (component.replacementCostCentsSnapshot ?? 0),
+      0,
+    );
+    const replacementValueCents =
+      line.quantity *
+      (line.bundleComponentSnapshots.length
+        ? componentReplacementValue
+        : (line.replacementCostCentsSnapshot ?? 0));
+    return {
+      name: line.snapshotName,
+      type: line.lineType,
+      quantity: line.quantity,
+      unitPriceCents: line.unitPriceCents,
+      subtotalCents: line.lineSubtotalCents,
+      replacementValueCents,
+      components: line.bundleComponentSnapshots.map((component) => ({
+        name: component.productNameSnapshot,
+        quantity: component.quantityPerBundle,
+        replacementValueCents: component.replacementCostCentsSnapshot ?? 0,
+      })),
+    };
+  });
+  const snapshot: ContractSnapshot = {
     company: {
       name: settings?.name || "Rental Business",
       address: address(
@@ -57,7 +83,6 @@ export async function generateContract(formData: FormData) {
       phone: settings?.phone,
       email: settings?.email,
     },
-    companyLogo: logo,
     booking: {
       number: booking.bookingNumber,
       title: booking.title,
@@ -85,27 +110,24 @@ export async function generateContract(formData: FormData) {
       ),
       createdAt: new Date().toISOString().slice(0, 10),
     },
-    lines: booking.lines.map((line) => ({
-      name: line.snapshotName,
-      type: line.lineType,
-      quantity: line.quantity,
-      unitPriceCents: line.unitPriceCents,
-      subtotalCents: line.lineSubtotalCents,
-      components: line.bundleComponentSnapshots.map(
-        (component) => `${component.productNameSnapshot} × ${component.quantityPerBundle}`,
-      ),
-    })),
+    lines,
     totals: {
       subtotalCents: booking.subtotalCents,
+      serviceChargeCents: lines
+        .filter((line) => line.type === "SERVICE")
+        .reduce((total, line) => total + line.subtotalCents, 0),
       discountCents: booking.discountCents,
       taxCents: booking.taxCents,
       totalCents: booking.totalCents,
+      rentalTotalCents: booking.totalCents - booking.securityDepositCents,
       securityDepositCents: booking.securityDepositCents,
+      replacementValueCents: lines.reduce((total, line) => total + line.replacementValueCents, 0),
     },
     title: template.title,
     legalTerms: template.legalTerms,
     footerText: template.footerText,
-  });
+  };
+  const bytes = await renderContractPdf(contractSnapshotPdfModel(snapshot, logo));
   const fileReference = await storeContract(bytes);
   await prisma.generatedContract.create({
     data: {
@@ -117,6 +139,9 @@ export async function generateContract(formData: FormData) {
       legalTermsSnapshot: template.legalTerms,
       footerTextSnapshot: template.footerText,
       fileReference,
+      pricingSnapshotJson: JSON.stringify(snapshot),
+      contentHash: hashContractSnapshot(snapshot),
+      status: "AWAITING_SIGNATURE",
     },
   });
   await addBookingActivity(

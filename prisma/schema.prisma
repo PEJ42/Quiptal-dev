@@ -8,16 +8,16 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  username     String?   @unique
-  passwordHash String
-  role         String    @default("ADMIN")
-  isArchived   Boolean   @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  sessions     Session[]
-  bookingActivities BookingActivity[]
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  username           String?             @unique
+  passwordHash       String
+  role               String              @default("ADMIN")
+  isArchived         Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  sessions           Session[]
+  bookingActivities  BookingActivity[]
   generatedContracts GeneratedContract[]
 }
 
@@ -34,85 +34,86 @@ model Session {
 }
 
 model CompanySettings {
-  id                       String   @id @default("default")
-  name                     String?
-  addressLine1             String?
-  addressLine2             String?
-  city                     String?
-  region                   String?
-  postalCode               String?
-  country                  String?
-  phone                    String?
-  email                    String?
-  website                  String?
-  logoReference            String?
-  timezone                 String   @default("America/Denver")
-  currency                 String   @default("USD")
-  defaultTaxRateBasisPoints Int     @default(0)
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                        String   @id @default("default")
+  name                      String?
+  addressLine1              String?
+  addressLine2              String?
+  city                      String?
+  region                    String?
+  postalCode                String?
+  country                   String?
+  phone                     String?
+  email                     String?
+  website                   String?
+  logoReference             String?
+  timezone                  String   @default("America/Denver")
+  currency                  String   @default("USD")
+  defaultTaxRateBasisPoints Int      @default(0)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 }
 
 model ProductCategory {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  isActive  Boolean  @default(true)
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String    @id @default(cuid())
+  name      String    @unique
+  isActive  Boolean   @default(true)
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   products  Product[]
 }
 
 model BookingType {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  isActive  Boolean  @default(true)
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String    @id @default(cuid())
+  name      String    @unique
+  isActive  Boolean   @default(true)
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   bookings  Booking[]
 }
 
 model BookingStatus {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  isActive  Boolean  @default(true)
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String    @id @default(cuid())
+  name      String    @unique
+  isActive  Boolean   @default(true)
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   bookings  Booking[]
 }
 
 model Service {
-  id                    String   @id @default(cuid())
-  name                  String   @unique
-  description           String?
-  defaultPriceCents     Int      @default(0)
-  isTaxable             Boolean  @default(true)
-  isActive              Boolean  @default(true)
-  sortOrder             Int      @default(0)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                String   @id @default(cuid())
+  name              String   @unique
+  description       String?
+  defaultPriceCents Int      @default(0)
+  isTaxable         Boolean  @default(true)
+  isActive          Boolean  @default(true)
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model Customer {
-  id           String            @id @default(cuid())
-  firstName    String
-  lastName     String
-  email        String
-  normalizedEmail String
-  phone        String?
-  addressLine1 String?
-  addressLine2 String?
-  city         String?
-  region       String?
-  postalCode   String?
-  country      String?
-  archivedAt   DateTime?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  contacts     CustomerContact[]
-  bookings     Booking[]
+  id                  String               @id @default(cuid())
+  firstName           String
+  lastName            String
+  email               String
+  normalizedEmail     String
+  phone               String?
+  addressLine1        String?
+  addressLine2        String?
+  city                String?
+  region              String?
+  postalCode          String?
+  country             String?
+  archivedAt          DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  contacts            CustomerContact[]
+  bookings            Booking[]
+  savedPaymentMethods SavedPaymentMethod[]
 
   @@index([normalizedEmail])
   @@index([lastName, firstName])
@@ -120,16 +121,16 @@ model Customer {
 }
 
 model CustomerContact {
-  id           String   @id @default(cuid())
-  customerId   String
-  name         String
-  email        String?
-  phone        String?
-  relationship String?
-  archivedAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  id                 String    @id @default(cuid())
+  customerId         String
+  name               String
+  email              String?
+  phone              String?
+  relationship       String?
+  archivedAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  customer           Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
   primaryForBookings Booking[]
 
   @@index([customerId])
@@ -137,18 +138,18 @@ model CustomerContact {
 }
 
 model Product {
-  id                   String          @id @default(cuid())
+  id                   String            @id @default(cuid())
   name                 String
   description          String?
   categoryId           String
-  defaultRentalCents   Int             @default(0)
+  defaultRentalCents   Int               @default(0)
   replacementCostCents Int?
-  isTaxable            Boolean         @default(true)
+  isTaxable            Boolean           @default(true)
   imageReference       String?
   archivedAt           DateTime?
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
-  category             ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  category             ProductCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   bundleComponents     BundleComponent[]
 
   @@index([categoryId])
@@ -156,75 +157,79 @@ model Product {
 }
 
 model Bundle {
-  id                 String            @id @default(cuid())
-  name               String
-  description        String?
-  fixedRentalCents   Int               @default(0)
-  isTaxable          Boolean           @default(true)
-  imageReference     String?
-  archivedAt         DateTime?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  components         BundleComponent[]
+  id               String            @id @default(cuid())
+  name             String
+  description      String?
+  fixedRentalCents Int               @default(0)
+  isTaxable        Boolean           @default(true)
+  imageReference   String?
+  archivedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  components       BundleComponent[]
 
   @@index([archivedAt])
 }
 
 model BundleComponent {
-  id          String  @id @default(cuid())
-  bundleId    String
-  productId   String
-  quantity    Int
-  displayOrder Int    @default(0)
-  bundle      Bundle  @relation(fields: [bundleId], references: [id], onDelete: Restrict)
-  product     Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  id           String  @id @default(cuid())
+  bundleId     String
+  productId    String
+  quantity     Int
+  displayOrder Int     @default(0)
+  bundle       Bundle  @relation(fields: [bundleId], references: [id], onDelete: Restrict)
+  product      Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   @@unique([bundleId, displayOrder])
   @@index([productId])
 }
 
 model Booking {
-  id                          String             @id @default(cuid())
-  bookingNumber               String             @unique
-  title                       String?
-  customerId                  String
-  primaryContactId            String?
-  startDate                   DateTime
-  endDate                     DateTime
-  bookingTypeId               String
-  bookingStatusId             String
-  eventAddressLine1           String?
-  eventAddressLine2           String?
-  eventCity                   String?
-  eventRegion                 String?
-  eventPostalCode             String?
-  eventCountry                String?
-  billingAddressLine1Snapshot String?
-  billingAddressLine2Snapshot String?
-  billingCitySnapshot         String?
-  billingRegionSnapshot       String?
-  billingPostalCodeSnapshot   String?
-  billingCountrySnapshot      String?
-  notes                       String?
-  discountType                String?
-  discountValue               Int                @default(0)
-  taxRateBasisPoints          Int                @default(0)
-  subtotalCents               Int                @default(0)
-  discountCents               Int                @default(0)
-  taxCents                    Int                @default(0)
-  securityDepositCents        Int                @default(0)
+  id                           String                 @id @default(cuid())
+  bookingNumber                String                 @unique
+  title                        String?
+  customerId                   String
+  primaryContactId             String?
+  startDate                    DateTime
+  endDate                      DateTime
+  bookingTypeId                String
+  bookingStatusId              String
+  eventAddressLine1            String?
+  eventAddressLine2            String?
+  eventCity                    String?
+  eventRegion                  String?
+  eventPostalCode              String?
+  eventCountry                 String?
+  billingAddressLine1Snapshot  String?
+  billingAddressLine2Snapshot  String?
+  billingCitySnapshot          String?
+  billingRegionSnapshot        String?
+  billingPostalCodeSnapshot    String?
+  billingCountrySnapshot       String?
+  notes                        String?
+  discountType                 String?
+  discountValue                Int                    @default(0)
+  taxRateBasisPoints           Int                    @default(0)
+  subtotalCents                Int                    @default(0)
+  discountCents                Int                    @default(0)
+  taxCents                     Int                    @default(0)
+  securityDepositCents         Int                    @default(0)
   securityDepositOverrideCents Int?
-  totalCents                  Int                @default(0)
-  archivedAt                  DateTime?
-  createdAt                   DateTime           @default(now())
-  updatedAt                   DateTime           @updatedAt
-  customer                    Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  primaryContact              CustomerContact?   @relation(fields: [primaryContactId], references: [id], onDelete: Restrict)
-  bookingType                 BookingType        @relation(fields: [bookingTypeId], references: [id], onDelete: Restrict)
-  bookingStatus               BookingStatus      @relation(fields: [bookingStatusId], references: [id], onDelete: Restrict)
-  lines                       BookingLine[]
-  activities                  BookingActivity[]
-  generatedContracts          GeneratedContract[]
+  totalCents                   Int                    @default(0)
+  archivedAt                   DateTime?
+  createdAt                    DateTime               @default(now())
+  updatedAt                    DateTime               @updatedAt
+  customer                     Customer               @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  primaryContact               CustomerContact?       @relation(fields: [primaryContactId], references: [id], onDelete: Restrict)
+  bookingType                  BookingType            @relation(fields: [bookingTypeId], references: [id], onDelete: Restrict)
+  bookingStatus                BookingStatus          @relation(fields: [bookingStatusId], references: [id], onDelete: Restrict)
+  lines                        BookingLine[]
+  activities                   BookingActivity[]
+  generatedContracts           GeneratedContract[]
+  payments                     Payment[]
+  savedPaymentMethods          SavedPaymentMethod[]
+  depositAuthorizations        DepositAuthorization[]
+  signingLinks                 SigningLink[]
 
   @@index([customerId])
   @@index([startDate])
@@ -285,36 +290,155 @@ model BookingActivity {
 }
 
 model ContractTemplate {
-  id             String   @id @default(cuid())
-  title          String   @default("Equipment Rental Agreement")
-  legalTerms     String   @default("This agreement governs the rental of the listed equipment.")
-  footerText     String?
-  version        Int      @default(1)
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                 String              @id @default(cuid())
+  title              String              @default("Equipment Rental Agreement")
+  legalTerms         String              @default("This agreement governs the rental of the listed equipment.")
+  footerText         String?
+  version            Int                 @default(1)
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
   generatedContracts GeneratedContract[]
 
   @@index([isActive])
 }
 
 model GeneratedContract {
-  id                    String           @id @default(cuid())
+  id                    String             @id @default(cuid())
   bookingId             String
   generatedByUserId     String
   templateId            String
   version               Int
-  status                String           @default("GENERATED")
+  status                String             @default("GENERATED")
   templateTitleSnapshot String
   legalTermsSnapshot    String
   footerTextSnapshot    String?
-  fileReference         String           @unique
-  generatedAt           DateTime         @default(now())
+  fileReference         String             @unique
+  pricingSnapshotJson   String             @default("{}")
+  contentHash           String?
+  signedAt              DateTime?
+  requiresResignature   Boolean            @default(false)
+  generatedAt           DateTime           @default(now())
   downloadedAt          DateTime?
-  booking               Booking          @relation(fields: [bookingId], references: [id], onDelete: Restrict)
-  generatedByUser       User             @relation(fields: [generatedByUserId], references: [id], onDelete: Restrict)
-  template              ContractTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  booking               Booking            @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  generatedByUser       User               @relation(fields: [generatedByUserId], references: [id], onDelete: Restrict)
+  template              ContractTemplate   @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  signature             ContractSignature?
+  signingLinks          SigningLink[]
+  payments              Payment[]
 
   @@unique([bookingId, version])
   @@index([bookingId])
+}
+
+model SigningLink {
+  id         String            @id @default(cuid())
+  bookingId  String
+  contractId String
+  tokenHash  String            @unique
+  revokedAt  DateTime?
+  expiresAt  DateTime?
+  viewedAt   DateTime?
+  createdAt  DateTime          @default(now())
+  booking    Booking           @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  contract   GeneratedContract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+
+  @@index([bookingId])
+  @@index([contractId])
+}
+
+model ContractSignature {
+  id            String            @id @default(cuid())
+  contractId    String            @unique
+  provider      String            @default("native")
+  signerName    String
+  signerEmail   String
+  signatureData String
+  ipAddress     String?
+  userAgent     String?
+  consentText   String
+  consentedAt   DateTime
+  contentHash   String
+  signedAt      DateTime          @default(now())
+  createdAt     DateTime          @default(now())
+  contract      GeneratedContract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+}
+
+model Payment {
+  id                        String             @id @default(cuid())
+  bookingId                 String
+  contractId                String?
+  provider                  String             @default("stripe")
+  ownerAccountReference     String?
+  status                    String             @default("UNPAID")
+  providerCustomerId        String?
+  providerCheckoutSessionId String?            @unique
+  providerPaymentIntentId   String?            @unique
+  paymentUrl                String?
+  amountRequestedCents      Int
+  amountPaidCents           Int                @default(0)
+  amountRefundedCents       Int                @default(0)
+  cardConsentText           String?
+  cardConsentedAt           DateTime?
+  createdAt                 DateTime           @default(now())
+  paidAt                    DateTime?
+  refundedAt                DateTime?
+  booking                   Booking            @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  contract                  GeneratedContract? @relation(fields: [contractId], references: [id], onDelete: Restrict)
+
+  @@index([bookingId])
+  @@index([contractId])
+  @@index([provider, status])
+}
+
+model SavedPaymentMethod {
+  id                      String   @id @default(cuid())
+  bookingId               String
+  customerId              String
+  provider                String   @default("stripe")
+  providerCustomerId      String
+  providerPaymentMethodId String   @unique
+  cardBrand               String?
+  cardLast4               String?
+  consentedAt             DateTime
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  booking                 Booking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  customer                Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([bookingId])
+  @@index([customerId])
+  @@index([provider, providerCustomerId])
+}
+
+model DepositAuthorization {
+  id                      String    @id @default(cuid())
+  bookingId               String
+  savedPaymentMethodId    String?
+  provider                String    @default("stripe")
+  status                  String    @default("NO_CARD")
+  providerPaymentIntentId String?   @unique
+  amountAuthorizedCents   Int       @default(0)
+  amountCapturedCents     Int       @default(0)
+  amountRefundedCents     Int       @default(0)
+  authorizationExpiresAt  DateTime?
+  authorizedAt            DateTime?
+  releasedAt              DateTime?
+  capturedAt              DateTime?
+  refundedAt              DateTime?
+  reason                  String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  booking                 Booking   @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  @@index([bookingId])
+  @@index([provider, status])
+}
+
+model PaymentWebhookEvent {
+  id              String   @id @default(cuid())
+  provider        String   @default("stripe")
+  providerEventId String   @unique
+  type            String
+  processedAt     DateTime @default(now())
 }

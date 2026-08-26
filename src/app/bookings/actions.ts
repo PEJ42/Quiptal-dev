@@ -7,6 +7,7 @@ import { bookingDate, bookingSchema } from "@/lib/booking-schema";
 import { requireAdmin } from "@/lib/auth";
 import { dollarsToCents } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
+import { markContractsForResignature } from "@/lib/signing";
 
 function bookingNumber() {
   return `B-${new Date().getUTCFullYear()}-${String(Date.now()).slice(-6)}`;
@@ -120,6 +121,7 @@ export async function addBookingLine(formData: FormData) {
     });
   }
   await recalculateBooking(bookingId);
+  await markContractsForResignature(bookingId);
   await addBookingActivity(bookingId, user.id, "LINE_ADDED", `${kind.toLowerCase()} line added`);
   revalidatePath(`/bookings/${bookingId}`);
   revalidatePath("/bookings");
@@ -147,6 +149,7 @@ export async function saveBookingLineQuantities(formData: FormData) {
   if (updates.length) {
     await prisma.$transaction(updates);
     await recalculateBooking(bookingId);
+    await markContractsForResignature(bookingId);
     await addBookingActivity(bookingId, user.id, "LINE_UPDATED", "Product quantities updated");
   }
   revalidatePath(`/bookings/${bookingId}`);
@@ -163,6 +166,7 @@ export async function updateBookingLine(formData: FormData) {
     data: { quantity, unitPriceCents, lineSubtotalCents: quantity * unitPriceCents },
   });
   await recalculateBooking(bookingId);
+  await markContractsForResignature(bookingId);
   await addBookingActivity(bookingId, user.id, "LINE_UPDATED", "Booking line updated");
   revalidatePath(`/bookings/${bookingId}`);
 }
@@ -195,6 +199,7 @@ export async function removeBookingLine(formData: FormData) {
     return;
   }
   await recalculateBooking(bookingId);
+  await markContractsForResignature(bookingId);
   await addBookingActivity(bookingId, user.id, "LINE_REMOVED", "Booking line removed");
   revalidatePath(`/bookings/${bookingId}`);
   revalidatePath("/bookings");
@@ -250,6 +255,7 @@ export async function updateBookingPricing(formData: FormData) {
     },
   });
   await recalculateBooking(bookingId);
+  await markContractsForResignature(bookingId);
   await addBookingActivity(bookingId, user.id, "PRICING_UPDATED", "Booking pricing updated");
   revalidatePath(`/bookings/${bookingId}`);
   revalidatePath("/bookings");
