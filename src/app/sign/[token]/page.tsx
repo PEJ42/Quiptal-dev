@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { contractTermsPlainText, contractTermsToBlocks } from "@/lib/contract-terms";
+import { contractTermsToBlocks, sanitizeContractTerms } from "@/lib/contract-terms";
 import { parseContractSnapshot } from "@/lib/contract-snapshot";
 import { CARD_CONSENT } from "@/lib/payment-service";
 import { ELECTRONIC_SIGNATURE_CONSENT, signingLinkForToken } from "@/lib/signing";
@@ -83,10 +83,23 @@ export default async function SigningPage({
       </section>
       <section className="section-card mt-6">
         <h2 className="text-lg font-semibold text-slate-900">Rental agreement terms</h2>
-        <div className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
-          {contractTermsToBlocks(snapshot.legalTerms).map((block, index) => (
-            <p key={index}>{contractTermsPlainText(block.html)}</p>
-          ))}
+        <div className="mt-4 space-y-3 text-sm leading-6 text-slate-700 [&_strong]:font-semibold">
+          {contractTermsToBlocks(snapshot.legalTerms).map((block, index) =>
+            block.kind === "bullet" ? (
+              <div className="flex gap-2" key={index}>
+                <span aria-hidden="true">•</span>
+                <div
+                  dangerouslySetInnerHTML={{ __html: sanitizeContractTerms(block.html) }}
+                  className="min-w-0"
+                />
+              </div>
+            ) : (
+              <div
+                dangerouslySetInnerHTML={{ __html: sanitizeContractTerms(block.html) }}
+                key={index}
+              />
+            ),
+          )}
         </div>
       </section>
       <form action={agreeAndSign} className="section-card mt-6 grid gap-4">

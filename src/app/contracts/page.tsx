@@ -1,9 +1,14 @@
+import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { ContractTermsEditor } from "@/components/contract-terms-editor";
 import { requireAdmin } from "@/lib/auth";
 import { contractTermsToEditorHtml } from "@/lib/contract-terms";
 import { prisma } from "@/lib/prisma";
 import { saveContractTemplate } from "./actions";
+
+function statusLabel(status: string) {
+  return status === "SIGNED" ? "Signed" : "Pending signature";
+}
 
 export default async function ContractsPage() {
   await requireAdmin();
@@ -44,27 +49,25 @@ export default async function ContractsPage() {
           <p className="mt-1 text-sm text-slate-600">
             Existing generated contracts preserve a snapshot of the version used to create them.
           </p>
-          <form action={saveContractTemplate} className="form-card mt-5 grid max-w-3xl gap-4">
+          <form action={saveContractTemplate} className="mt-5 grid max-w-3xl gap-5">
             <input name="id" type="hidden" value={template.id} />
-            <label className="text-sm">
+            <label className="grid gap-1 text-sm font-medium text-slate-700">
               Title
               <input
-                className="mt-1 w-full border p-2"
+                className="w-full border px-3 py-2"
                 defaultValue={template.title}
                 name="title"
                 required
               />
             </label>
-            <div>
+            <div className="grid gap-1">
               <p className="text-sm font-medium text-slate-700">Legal terms</p>
-              <div className="mt-1">
-                <ContractTermsEditor initialHtml={contractTermsToEditorHtml(template.legalTerms)} />
-              </div>
+              <ContractTermsEditor initialHtml={contractTermsToEditorHtml(template.legalTerms)} />
             </div>
-            <label className="text-sm">
+            <label className="grid gap-1 text-sm font-medium text-slate-700">
               Footer text
               <input
-                className="mt-1 w-full border p-2"
+                className="w-full border px-3 py-2"
                 defaultValue={template.footerText ?? ""}
                 name="footerText"
               />
@@ -106,9 +109,20 @@ export default async function ContractsPage() {
                     {contract.generatedAt.toISOString().slice(0, 10)}
                   </p>
                 </div>
-                <a className="secondary-button shrink-0" href={`/api/contracts/${contract.id}`}>
-                  Download PDF
-                </a>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      contract.status === "SIGNED"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-amber-50 text-amber-700"
+                    }`}
+                  >
+                    {statusLabel(contract.status)}
+                  </span>
+                  <Link className="secondary-button shrink-0" href={`/contracts/${contract.id}`}>
+                    View contract
+                  </Link>
+                </div>
               </div>
             ))
           )}

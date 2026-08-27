@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { BookingLinesEditor } from "@/components/booking-lines-editor";
@@ -196,16 +197,35 @@ export default async function BookingPage({
           <input name="bookingId" type="hidden" value={id} />
           <button className="primary-button">Generate new PDF version</button>
         </form>
-        <ul className="mt-4 space-y-2 text-sm">
+        <ul className="mt-4 space-y-3 text-sm">
           {booking.generatedContracts.length === 0 ? (
             <li className="text-slate-600">No contracts generated yet.</li>
           ) : (
             booking.generatedContracts.map((contract) => (
-              <li key={contract.id}>
-                <a className="text-action" href={`/api/contracts/${contract.id}`}>
-                  Download contract version {contract.version}
-                </a>{" "}
-                · {contract.generatedAt.toISOString().slice(0, 10)}
+              <li
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3"
+                key={contract.id}
+              >
+                <div>
+                  <p className="font-medium text-slate-800">Contract version {contract.version}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Generated {contract.generatedAt.toISOString().slice(0, 10)}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      contract.status === "SIGNED"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-amber-50 text-amber-700"
+                    }`}
+                  >
+                    {contract.status === "SIGNED" ? "Signed" : "Pending signature"}
+                  </span>
+                  <Link className="secondary-button" href={`/contracts/${contract.id}`}>
+                    View contract
+                  </Link>
+                </div>
               </li>
             ))
           )}

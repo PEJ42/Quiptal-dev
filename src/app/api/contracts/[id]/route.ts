@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { addBookingActivity } from "@/lib/booking-service";
 import { contractsDirectory } from "@/lib/app-storage";
 
-export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireAdmin();
   const id = (await params).id;
   const contract = await prisma.generatedContract.findUnique({
@@ -25,7 +25,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     return new Response(bytes, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="booking-${contract.booking.bookingNumber}-contract-${contract.version}.pdf"`,
+        "Content-Disposition": `${
+          new URL(request.url).searchParams.get("disposition") === "inline"
+            ? "inline"
+            : "attachment"
+        }; filename="booking-${contract.booking.bookingNumber}-contract-${contract.version}.pdf"`,
         "Cache-Control": "private, no-store",
       },
     });
