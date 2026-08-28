@@ -8,6 +8,7 @@ import { requireAdmin } from "@/lib/auth";
 import { dollarsToCents } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { markContractsForResignature } from "@/lib/signing";
+import { parseContractSnapshot } from "@/lib/contract-snapshot";
 
 function bookingNumber() {
   return `B-${new Date().getUTCFullYear()}-${String(Date.now()).slice(-6)}`;
@@ -132,17 +133,21 @@ export async function saveBookingLineQuantities(formData: FormData) {
   const bookingId = z.string().cuid().parse(formData.get("bookingId"));
   const productLines = await prisma.bookingLine.findMany({
     where: { bookingId, lineType: "PRODUCT" },
-    select: { id: true, quantity: true, unitPriceCents: true },
+    select: { id: true, quantity: true, unitPriceCents: true, priceOverrideCents: true },
   });
   const updates = productLines.flatMap((line) => {
     const rawQuantity = formData.get(`quantity:${line.id}`);
     if (rawQuantity === null) return [];
     const quantity = z.coerce.number().int().min(1).max(10_000).parse(rawQuantity);
     if (quantity === line.quantity) return [];
+    const priceCents = line.priceOverrideCents ?? line.unitPriceCents;
     return [
       prisma.bookingLine.update({
         where: { id: line.id },
-        data: { quantity, lineSubtotalCents: quantity * line.unitPriceCents },
+        data: {
+          quantity,
+          lineSubtotalCents: quantity * priceCents,
+        },
       }),
     ];
   });
@@ -155,6 +160,32 @@ export async function saveBookingLineQuantities(formData: FormData) {
   revalidatePath(`/bookings/${bookingId}`);
   revalidatePath("/bookings");
 }
+
+export async function updateBookingLinePrice(formData: FormData) {
+  const user = await requireAdmin();
+  const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const id = z.string().cuid().parse(formData.get("id"));
+  const priceOverrideCents = z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(100_000_000)
+    .parse(dollarsToCents(formData.get("rentalPriceDollars")));
+  const line = await prisma.bookingLine.findFirst({
+    where: { id, bookingId },
+    select: { quantity: true },
+  });
+  if (!line) return;
+  await prisma.bookingLine.update({
+    where: { id },
+    data: { priceOverrideCents, lineSubtotalCents: line.quantity * priceOverrideCents },
+  });
+  await recalculateBooking(bookingId);
+  await markContractsForResignature(bookingId);
+  await addBookingActivity(bookingId, user.id, "LINE_UPDATED", "Booking line price updated");
+  revalidatePath(`/bookings/${bookingId}`);
+  revalidatePath("/bookings");
+}
 export async function updateBookingLine(formData: FormData) {
   const user = await requireAdmin();
   const id = z.string().cuid().parse(formData.get("id"));
@@ -163,12 +194,82 @@ export async function updateBookingLine(formData: FormData) {
   const unitPriceCents = z.coerce.number().int().min(0).parse(formData.get("unitPriceCents"));
   await prisma.bookingLine.update({
     where: { id },
-    data: { quantity, unitPriceCents, lineSubtotalCents: quantity * unitPriceCents },
+    data: {
+      quantity,
+      priceOverrideCents: unitPriceCents,
+      lineSubtotalCents: quantity * unitPriceCents,
+    },
   });
   await recalculateBooking(bookingId);
   await markContractsForResignature(bookingId);
   await addBookingActivity(bookingId, user.id, "LINE_UPDATED", "Booking line updated");
   revalidatePath(`/bookings/${bookingId}`);
+}
+
+export async function revertBookingToContractValues(formData: FormData) {
+  const user = await requireAdmin();
+  const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const contractId = z.string().cuid().parse(formData.get("contractId"));
+  const contract = await prisma.generatedContract.findFirst({
+    where: { id: contractId, bookingId },
+    include: { signature: true },
+  });
+  if (!contract) redirect(`/bookings/${bookingId}?error=contract`);
+
+  const snapshot = parseContractSnapshot(contract.pricingSnapshotJson);
+  const lines = await prisma.bookingLine.findMany({
+    where: { bookingId },
+    orderBy: { displayOrder: "asc" },
+    select: { id: true, lineType: true, snapshotName: true, quantity: true },
+  });
+  const hasMatchingItems =
+    lines.length === snapshot.lines.length &&
+    lines.every(
+      (line, index) =>
+        line.lineType === snapshot.lines[index]?.type &&
+        line.snapshotName === snapshot.lines[index]?.name,
+    );
+  if (!hasMatchingItems) redirect(`/bookings/${bookingId}?error=contract-items`);
+
+  await prisma.$transaction([
+    ...lines.map((line, index) => {
+      const snapshotLine = snapshot.lines[index];
+      const quantity = line.lineType === "PRODUCT" ? snapshotLine.quantity : line.quantity;
+      return prisma.bookingLine.update({
+        where: { id: line.id },
+        data: {
+          quantity,
+          priceOverrideCents: snapshotLine.unitPriceCents,
+          lineSubtotalCents: quantity * snapshotLine.unitPriceCents,
+        },
+      });
+    }),
+    ...(snapshot.pricingSettings
+      ? [
+          prisma.booking.update({
+            where: { id: bookingId },
+            data: snapshot.pricingSettings,
+          }),
+        ]
+      : []),
+  ]);
+  await recalculateBooking(bookingId);
+  await markContractsForResignature(bookingId);
+  await prisma.generatedContract.update({
+    where: { id: contractId },
+    data: {
+      requiresResignature: false,
+      status: contract.signature ? "SIGNED" : "AWAITING_SIGNATURE",
+    },
+  });
+  await addBookingActivity(
+    bookingId,
+    user.id,
+    "LINE_UPDATED",
+    `Booking values restored from contract version ${contract.version}`,
+  );
+  revalidatePath(`/bookings/${bookingId}`);
+  revalidatePath("/contracts");
 }
 export async function removeBookingLine(formData: FormData) {
   const user = await requireAdmin();

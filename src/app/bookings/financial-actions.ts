@@ -21,7 +21,11 @@ export async function createCustomerSigningLink(formData: FormData) {
   const user = await requireAdmin();
   const bookingId = bookingIdFrom(formData);
   const contract = await prisma.generatedContract.findFirst({
-    where: { bookingId, status: { in: ["AWAITING_SIGNATURE", "REQUIRES_RESIGNATURE"] } },
+    where: {
+      bookingId,
+      status: { in: ["AWAITING_SIGNATURE", "REQUIRES_RESIGNATURE"] },
+      requiresResignature: false,
+    },
     orderBy: { version: "desc" },
   });
   if (!contract) redirect(`/bookings/${bookingId}?error=no-contract`);

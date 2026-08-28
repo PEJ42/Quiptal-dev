@@ -42,6 +42,19 @@ export default async function SigningPage({
       </main>
     );
   }
+  if (link.contract.requiresResignature) {
+    return (
+      <main className="mx-auto max-w-2xl p-6 sm:p-12">
+        <section className="section-card text-center">
+          <p className="page-kicker">Agreement updated</p>
+          <h1 className="page-title mt-2">This contract is out of date</h1>
+          <p className="page-subtitle mt-3">
+            The booking details changed. The rental business will send an updated agreement.
+          </p>
+        </section>
+      </main>
+    );
+  }
   return (
     <main className="mx-auto max-w-3xl p-6 sm:p-12">
       <header className="mb-6">

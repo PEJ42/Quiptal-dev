@@ -17,7 +17,12 @@ export async function agreeAndSign(formData: FormData) {
     redirect(`/sign/${token}?error=consent`);
   }
   const link = await signingLinkForToken(token);
-  if (!link || link.contract.status === "SIGNED" || link.contract.signature) {
+  if (
+    !link ||
+    link.contract.status === "SIGNED" ||
+    link.contract.signature ||
+    link.contract.requiresResignature
+  ) {
     redirect(`/sign/${token}?error=unavailable`);
   }
   const snapshot = parseContractSnapshot(link.contract.pricingSnapshotJson);
@@ -25,7 +30,10 @@ export async function agreeAndSign(formData: FormData) {
   const forwardedFor = requestHeaders.get("x-forwarded-for");
   const ipAddress = forwardedFor?.split(",")[0]?.trim() || requestHeaders.get("x-real-ip") || null;
   const signedAt = new Date();
-  const signedPdf = await renderContractPdf(contractSnapshotPdfModel(snapshot));
+  const userAgent = requestHeaders.get("user-agent");
+  const signedPdf = await renderContractPdf(
+    contractSnapshotPdfModel(snapshot, null, { signerName, signedAt, userAgent }),
+  );
   const signedFileReference = await storeContract(signedPdf);
   await prisma.$transaction([
     prisma.contractSignature.create({
@@ -35,7 +43,7 @@ export async function agreeAndSign(formData: FormData) {
         signerEmail: link.booking.customer.email,
         signatureData: `typed:${signerName}`,
         ipAddress,
-        userAgent: requestHeaders.get("user-agent"),
+        userAgent,
         consentText: ELECTRONIC_SIGNATURE_CONSENT,
         consentedAt: signedAt,
         contentHash: link.contract.contentHash || "",

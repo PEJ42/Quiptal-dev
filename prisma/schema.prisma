@@ -247,6 +247,7 @@ model BookingLine {
   snapshotDescription          String?
   quantity                     Int
   unitPriceCents               Int
+  priceOverrideCents           Int?
   taxable                      Boolean
   lineSubtotalCents            Int
   replacementCostCentsSnapshot Int?

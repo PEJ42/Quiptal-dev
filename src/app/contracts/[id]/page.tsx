@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { requireAdmin } from "@/lib/auth";
+import { signatureDeviceLabel } from "@/lib/contracts";
 import { prisma } from "@/lib/prisma";
 
 export default async function ContractViewerPage({ params }: { params: Promise<{ id: string }> }) {
@@ -44,7 +45,11 @@ export default async function ContractViewerPage({ params }: { params: Promise<{
       {isSigned && contract.signature && (
         <p className="mt-5 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           Signed by {contract.signature.signerName} on{" "}
-          {contract.signature.signedAt.toISOString().slice(0, 10)}. This is the signed contract.
+          {contract.signature.signedAt.toLocaleString("en-US", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}{" "}
+          using {signatureDeviceLabel(contract.signature.userAgent)}. This is the signed contract.
         </p>
       )}
       <section className="section-card mt-6 overflow-hidden p-0">

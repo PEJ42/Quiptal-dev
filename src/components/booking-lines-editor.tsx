@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import {
   addBookingLine,
   removeBookingLine,
   saveBookingLineQuantities,
+  updateBookingLinePrice,
 } from "@/app/bookings/actions";
 
 type BookingLine = {
@@ -13,6 +14,7 @@ type BookingLine = {
   snapshotName: string;
   quantity: number;
   unitPriceCents: number;
+  priceOverrideCents: number | null;
   lineSubtotalCents: number;
   bundleComponentSnapshots: {
     id: string;
@@ -40,10 +42,25 @@ export function BookingLinesEditor({
   bundles: Bundle[];
 }) {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [editingPriceLine, setEditingPriceLine] = useState<BookingLine | null>(null);
+  const [isSavingPrice, startSavingPrice] = useTransition();
   const [selectedSource, setSelectedSource] = useState(
     products[0] ? `PRODUCT:${products[0].id}` : bundles[0] ? `BUNDLE:${bundles[0].id}` : "",
   );
   const selectedKind = selectedSource.split(":")[0];
+  const editingPriceCents = editingPriceLine
+    ? (editingPriceLine.priceOverrideCents ??
+      (editingPriceLine.lineType === "BUNDLE" && editingPriceLine.unitPriceCents === 0
+        ? editingPriceLine.lineSubtotalCents
+        : editingPriceLine.unitPriceCents))
+    : 0;
+
+  function savePrice(formData: FormData) {
+    startSavingPrice(async () => {
+      await updateBookingLinePrice(formData);
+      setEditingPriceLine(null);
+    });
+  }
 
   return (
     <>
@@ -61,6 +78,11 @@ export function BookingLinesEditor({
               {lines.map((line) => {
                 const isProduct = line.lineType === "PRODUCT";
                 const isBundle = line.lineType === "BUNDLE";
+                const displayedPriceCents =
+                  line.priceOverrideCents ??
+                  (isBundle && line.unitPriceCents === 0
+                    ? line.lineSubtotalCents
+                    : line.unitPriceCents);
                 return (
                   <div className="rounded-xl border border-slate-100 bg-slate-50 p-4" key={line.id}>
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -83,14 +105,25 @@ export function BookingLinesEditor({
                         )}
                         {isBundle && (
                           <p className="mt-1 text-xs text-slate-600">
-                            Fixed bundle price: {currency(line.unitPriceCents)}
+                            Fixed bundle price: {currency(displayedPriceCents)}
                           </p>
                         )}
                       </div>
                       <div className="text-right text-sm">
-                        <p className="font-semibold text-slate-900">
-                          {currency(line.lineSubtotalCents)}
-                        </p>
+                        <div className="flex items-center justify-end gap-2">
+                          <p className="font-semibold text-slate-900">
+                            {currency(line.lineSubtotalCents)}
+                          </p>
+                          <button
+                            aria-label={`Edit rental price for ${line.snapshotName}`}
+                            className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                            onClick={() => setEditingPriceLine(line)}
+                            title="Edit rental price"
+                            type="button"
+                          >
+                            ✎
+                          </button>
+                        </div>
                         {!isProduct && (
                           <p className="mt-1 text-xs text-slate-500">Fixed quantity</p>
                         )}
@@ -233,6 +266,68 @@ export function BookingLinesEditor({
               </button>
               <button className="primary-button" type="submit">
                 Add to booking
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {editingPriceLine && (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
+          role="dialog"
+        >
+          <form action={savePrice} className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <input name="bookingId" type="hidden" value={bookingId} />
+            <input name="id" type="hidden" value={editingPriceLine.id} />
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="page-kicker">Booking price</p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-900">Edit rental price</h3>
+                <p className="mt-1 text-sm text-slate-600">{editingPriceLine.snapshotName}</p>
+              </div>
+              <button
+                aria-label="Close price editor"
+                className="text-xl leading-none text-slate-500 hover:text-slate-800"
+                onClick={() => setEditingPriceLine(null)}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+            <label className="mt-5 grid gap-1 text-sm font-medium text-slate-700">
+              Rental price
+              <span className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-500">
+                  $
+                </span>
+                <input
+                  autoFocus
+                  className="w-full rounded-lg border border-slate-200 py-2 pl-6 pr-3 text-sm text-slate-900"
+                  defaultValue={(editingPriceCents / 100).toFixed(2)}
+                  min="0"
+                  name="rentalPriceDollars"
+                  required
+                  step="0.01"
+                  type="number"
+                />
+              </span>
+              <span className="text-xs font-normal text-slate-500">
+                The total updates immediately after saving. Replacement value and deposit are
+                unchanged.
+              </span>
+            </label>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                className="secondary-button"
+                onClick={() => setEditingPriceLine(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button className="primary-button" disabled={isSavingPrice} type="submit">
+                {isSavingPrice ? "Saving…" : "Save price"}
               </button>
             </div>
           </form>

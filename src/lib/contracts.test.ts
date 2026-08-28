@@ -1,6 +1,6 @@
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
-import { renderContractPdf } from "./contracts";
+import { renderContractPdf, signatureDeviceLabel } from "./contracts";
 
 describe("renderContractPdf", () => {
   it("creates a readable Letter-size document from a booking snapshot", async () => {
@@ -45,5 +45,15 @@ describe("renderContractPdf", () => {
     expect(document.getPageCount()).toBeGreaterThan(0);
     expect(firstPage.getWidth()).toBe(612);
     expect(firstPage.getHeight()).toBe(792);
+  });
+});
+
+describe("signatureDeviceLabel", () => {
+  it("turns a browser user agent into a readable signing-device label", () => {
+    expect(
+      signatureDeviceLabel(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
+      ),
+    ).toBe("Chrome on macOS");
   });
 });

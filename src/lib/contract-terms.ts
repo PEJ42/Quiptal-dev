@@ -9,6 +9,76 @@ const decodeHtml = (value: string) =>
     .replaceAll("&quot;", '"')
     .replaceAll("&#39;", "'");
 
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
+function paragraphAndBullets(value: string) {
+  const parts = value
+    .split("•")
+    .map((part) => part.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  if (parts.length === 0) return "";
+  const [paragraph, ...bullets] = parts;
+  return [
+    paragraph ? "<p>" + escapeHtml(paragraph) + "</p>" : "",
+    bullets.length
+      ? "<ul>" + bullets.map((bullet) => "<li>" + escapeHtml(bullet) + "</li>").join("") + "</ul>"
+      : "",
+  ].join("");
+}
+
+function formatPlainContractTerms(value: string) {
+  const text = decodeHtml(value).replace(/\r\n?/g, "\n").trim();
+  if (!text) return "";
+
+  // Legacy templates were often entered as one long paragraph. A numbered,
+  // all-caps title marks each agreement section and can be safely made into
+  // a readable bold heading without changing the wording.
+  const headingPattern = /(\d+\.\s+[A-Z][A-Z ,&/-]{2,})(?=\s)/g;
+  const sections: { heading?: string; body: string }[] = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = headingPattern.exec(text))) {
+    const before = text.slice(cursor, match.index).trim();
+    if (before) sections.push({ body: before });
+    cursor = match.index + match[0].length;
+
+    const next = headingPattern.exec(text);
+    const body = text.slice(cursor, next?.index).trim();
+    sections.push({ heading: match[1], body });
+    if (!next) {
+      cursor = text.length;
+      break;
+    }
+    cursor = next.index;
+    headingPattern.lastIndex = next.index;
+  }
+
+  if (sections.length === 0) {
+    return text
+      .split(/\n\s*\n/)
+      .map(paragraphAndBullets)
+      .join("");
+  }
+
+  const trailing = text.slice(cursor).trim();
+  if (trailing) sections.push({ body: trailing });
+  return sections
+    .map(({ heading, body }) =>
+      [
+        heading ? "<p><strong>" + escapeHtml(heading) + "</strong></p>" : "",
+        paragraphAndBullets(body),
+      ].join(""),
+    )
+    .join("");
+}
+
 export function sanitizeContractTerms(value: string) {
   return value
     .replace(/\u0000/g, "")
@@ -37,16 +107,13 @@ export function contractTermsToEditorHtml(value: string) {
   const sanitized = sanitizeContractTerms(value);
   if (/<\/?(?:p|div|ul|ol|li|strong|br)\b/i.test(sanitized)) return sanitized;
 
-  return sanitized
-    .split(/\r?\n\s*\r?\n/)
-    .map((paragraph) => `<p>${paragraph.replace(/\r?\n/g, "<br>")}</p>`)
-    .join("");
+  return formatPlainContractTerms(sanitized);
 }
 
 export type ContractTermsBlock = { kind: "paragraph" | "bullet"; html: string };
 
 export function contractTermsToBlocks(value: string): ContractTermsBlock[] {
-  const sanitized = sanitizeContractTerms(value);
+  const sanitized = contractTermsToEditorHtml(value);
   const blocks: ContractTermsBlock[] = [];
   const tokenPattern = /<(\/)?(p|div|ul|ol|li|br)\b[^>]*>/gi;
   let activeParagraph = "";

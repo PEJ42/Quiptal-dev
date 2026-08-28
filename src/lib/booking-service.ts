@@ -33,7 +33,7 @@ export async function recalculateBooking(bookingId: string) {
     currentBundles.map((bundle) => [bundle.name, bundle.fixedRentalCents]),
   );
   const pricedLines = lines.map((line) => {
-    const repairedUnitPriceCents =
+    const catalogPriceCents =
       line.lineType === "BUNDLE" && line.unitPriceCents === 0 && line.sourceCatalogId
         ? (bundlePriceById.get(line.sourceCatalogId) ??
           bundlePriceByName.get(line.snapshotName) ??
@@ -44,7 +44,7 @@ export async function recalculateBooking(bookingId: string) {
             line.lineSubtotalCents ??
             line.unitPriceCents)
           : line.unitPriceCents;
-    return { ...line, unitPriceCents: repairedUnitPriceCents };
+    return { ...line, unitPriceCents: line.priceOverrideCents ?? catalogPriceCents };
   });
   const securityDepositCents =
     booking.securityDepositOverrideCents ?? recommendedSecurityDepositCents(lines);

@@ -16,7 +16,11 @@ import {
   releaseBookingDeposit,
   revokeSigningLinks,
 } from "../financial-actions";
-import { updateBookingPricing, updateBookingStatus } from "../actions";
+import {
+  revertBookingToContractValues,
+  updateBookingPricing,
+  updateBookingStatus,
+} from "../actions";
 
 export default async function BookingPage({
   params,
@@ -86,6 +90,12 @@ export default async function BookingPage({
           <button className="secondary-button">Update status</button>
         </form>
       </header>
+      {query.error === "contract-items" && (
+        <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          This contract cannot be restored automatically because its item list is different from the
+          current booking. You can still use it as a reference or generate a new contract.
+        </p>
+      )}
       <section className="section-card mt-7 text-sm">
         <h2 className="text-base font-semibold text-slate-800">Event and billing details</h2>
         <p className="mt-2 text-slate-600">
@@ -213,6 +223,14 @@ export default async function BookingPage({
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  {contract.requiresResignature && (
+                    <span
+                      className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"
+                      title="Booking values have changed since this contract was generated"
+                    >
+                      ⚠ Out of date
+                    </span>
+                  )}
                   <span
                     className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                       contract.status === "SIGNED"
@@ -225,6 +243,18 @@ export default async function BookingPage({
                   <Link className="secondary-button" href={`/contracts/${contract.id}`}>
                     View contract
                   </Link>
+                  <form action={revertBookingToContractValues}>
+                    <input name="bookingId" type="hidden" value={id} />
+                    <input name="contractId" type="hidden" value={contract.id} />
+                    <button
+                      aria-label="Restore values"
+                      className="secondary-button h-10 w-10 px-0 text-lg"
+                      title="Restore values"
+                      type="submit"
+                    >
+                      ↺
+                    </button>
+                  </form>
                 </div>
               </li>
             ))

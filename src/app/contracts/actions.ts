@@ -123,6 +123,12 @@ export async function generateContract(formData: FormData) {
       securityDepositCents: booking.securityDepositCents,
       replacementValueCents: lines.reduce((total, line) => total + line.replacementValueCents, 0),
     },
+    pricingSettings: {
+      discountType: booking.discountType,
+      discountValue: booking.discountValue,
+      taxRateBasisPoints: booking.taxRateBasisPoints,
+      securityDepositOverrideCents: booking.securityDepositOverrideCents,
+    },
     title: template.title,
     legalTerms: template.legalTerms,
     footerText: template.footerText,

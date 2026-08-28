@@ -31,8 +31,14 @@ export async function signingLinkForToken(token: string) {
 }
 
 export async function markContractsForResignature(bookingId: string) {
-  await prisma.generatedContract.updateMany({
-    where: { bookingId, status: "SIGNED" },
-    data: { status: "REQUIRES_RESIGNATURE", requiresResignature: true },
-  });
+  await prisma.$transaction([
+    prisma.generatedContract.updateMany({
+      where: { bookingId, status: "SIGNED" },
+      data: { status: "REQUIRES_RESIGNATURE", requiresResignature: true },
+    }),
+    prisma.generatedContract.updateMany({
+      where: { bookingId, status: { not: "SIGNED" } },
+      data: { requiresResignature: true },
+    }),
+  ]);
 }

@@ -42,15 +42,22 @@ export type ContractViewModel = {
   title: string;
   legalTerms: string;
   footerText?: string | null;
+  signature?: {
+    signerName: string;
+    signedAt: Date | string;
+    userAgent?: string | null;
+  } | null;
 };
 
 export function contractSnapshotPdfModel(
   snapshot: ContractSnapshot,
   companyLogo?: { bytes: Uint8Array; format: "jpg" | "png" } | null,
+  signature?: ContractViewModel["signature"],
 ): ContractViewModel {
   return {
     ...snapshot,
     companyLogo,
+    signature,
     lines: snapshot.lines.map((line) => ({
       ...line,
       components: line.components.map(
@@ -62,6 +69,42 @@ export function contractSnapshotPdfModel(
 }
 
 const cents = (value: number) => `$${(value / 100).toFixed(2)}`;
+
+export function signatureDeviceLabel(userAgent?: string | null) {
+  if (!userAgent) return "Device information unavailable";
+  const browser = userAgent.includes("Edg/")
+    ? "Microsoft Edge"
+    : userAgent.includes("OPR/")
+      ? "Opera"
+      : userAgent.includes("Chrome/")
+        ? "Chrome"
+        : userAgent.includes("Firefox/")
+          ? "Firefox"
+          : userAgent.includes("Safari/")
+            ? "Safari"
+            : "Web browser";
+  const operatingSystem = userAgent.includes("iPhone")
+    ? "iPhone"
+    : userAgent.includes("iPad")
+      ? "iPad"
+      : userAgent.includes("Android")
+        ? "Android"
+        : userAgent.includes("Windows")
+          ? "Windows"
+          : userAgent.includes("Mac OS X")
+            ? "macOS"
+            : userAgent.includes("Linux")
+              ? "Linux"
+              : null;
+  return operatingSystem ? `${browser} on ${operatingSystem}` : browser;
+}
+
+const signedAtLabel = (value: Date | string) =>
+  `${new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(new Date(value))} UTC`;
 const wrap = (text: string, width: number, fontSize: number) => {
   const characters = Math.max(20, Math.floor(width / (fontSize * 0.5)));
   const words = text.replace(/\s+/g, " ").trim().split(" ");
@@ -105,21 +148,30 @@ export async function renderContractPdf(model: ContractViewModel) {
     let lineStarted = false;
     if (bullet) page.drawText("•", { x: margin, y, size, font });
 
-    for (const run of contractTermsToRuns(value)) {
-      const selectedFont = run.bold ? bold : font;
-      for (const part of run.text.replace(/\s+/g, " ").split(/(\s+)/)) {
-        if (!part) continue;
-        const partWidth = selectedFont.widthOfTextAtSize(part, size);
-        if (x + partWidth > maxX && lineStarted) {
-          y -= lineHeight;
+    const segments = value.split(/<br\s*\/?>/i);
+    for (const [segmentIndex, segment] of segments.entries()) {
+      for (const run of contractTermsToRuns(segment)) {
+        const selectedFont = run.bold ? bold : font;
+        for (const part of run.text.replace(/\s+/g, " ").split(/(\s+)/)) {
+          if (!part) continue;
+          const partWidth = selectedFont.widthOfTextAtSize(part, size);
+          if (x + partWidth > maxX && lineStarted) {
+            y -= lineHeight;
+            if (y < margin + 24) newPage();
+            x = startX;
+            lineStarted = false;
+          }
           if (y < margin + 24) newPage();
-          x = startX;
-          lineStarted = false;
+          page.drawText(part, { x, y, size, font: selectedFont });
+          x += partWidth;
+          lineStarted = true;
         }
+      }
+      if (segmentIndex < segments.length - 1) {
+        y -= lineHeight;
         if (y < margin + 24) newPage();
-        page.drawText(part, { x, y, size, font: selectedFont });
-        x += partWidth;
-        lineStarted = true;
+        x = startX;
+        lineStarted = false;
       }
     }
     y -= lineHeight + 3;
@@ -210,10 +262,14 @@ export async function renderContractPdf(model: ContractViewModel) {
   );
   y -= 8;
   text("Customer acceptance", 11, true);
-  paragraph(
-    "Signature or electronic acceptance will be supported in a future version. This generated version does not collect a signature.",
-    9,
-  );
+  if (model.signature) {
+    text("Customer signature", 9);
+    text(model.signature.signerName, 12, true);
+    text(`Signature date and time: ${signedAtLabel(model.signature.signedAt)}`, 9);
+    text(`Signing device: ${signatureDeviceLabel(model.signature.userAgent)}`, 9);
+  } else {
+    paragraph("This contract is awaiting customer signature.", 9);
+  }
   const pages = pdf.getPages();
   pages.forEach((currentPage, index) =>
     currentPage.drawText(`${model.footerText || ""}  Page ${index + 1} of ${pages.length}`, {

@@ -34,6 +34,12 @@ export type ContractSnapshot = {
     securityDepositCents: number;
     replacementValueCents: number;
   };
+  pricingSettings?: {
+    discountType: string | null;
+    discountValue: number;
+    taxRateBasisPoints: number;
+    securityDepositOverrideCents: number | null;
+  };
   title: string;
   legalTerms: string;
   footerText?: string | null;
