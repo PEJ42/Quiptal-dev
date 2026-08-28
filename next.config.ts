@@ -23,6 +23,11 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // Contract PDFs are embedded only by the authenticated viewer on this same site.
+        source: "/api/contracts/:path*",
+        headers: [{ key: "X-Frame-Options", value: "SAMEORIGIN" }],
+      },
     ];
   },
 };
