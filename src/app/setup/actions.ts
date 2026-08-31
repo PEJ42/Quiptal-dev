@@ -12,12 +12,22 @@ export async function createFirstAdmin(formData: FormData) {
     password: formData.get("password"),
   });
   if (!parsed.success) redirect("/setup?error=invalid");
-  const user = await prisma.user.create({
-    data: {
-      email: parsed.data.email,
-      passwordHash: await passwordHash(parsed.data.password),
-      role: "ADMIN",
-    },
+  const user = await prisma.$transaction(async (tx) => {
+    const team = await tx.team.create({
+      data: { name: `${parsed.data.email.split("@")[0]}'s workspace` },
+    });
+    const created = await tx.user.create({
+      data: {
+        email: parsed.data.email,
+        passwordHash: await passwordHash(parsed.data.password),
+        role: "ADMIN",
+        activeTeamId: team.id,
+      },
+    });
+    await tx.teamMembership.create({
+      data: { userId: created.id, teamId: team.id, role: "ADMIN" },
+    });
+    return created;
   });
   await createSession(user.id);
   redirect("/");

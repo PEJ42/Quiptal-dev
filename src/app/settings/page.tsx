@@ -1,10 +1,14 @@
 import Image from "next/image";
 import { AppShell } from "@/components/app-shell";
-import { requireAdmin } from "@/lib/auth";
+import { ServicePriceEditor } from "@/components/service-price-editor";
+import { TeamInvitationForm } from "@/components/team-invitation-form";
+import { requireTeamAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { companyLogoConstraints } from "@/lib/upload-storage";
 import {
   createSettingItem,
+  removeTeamMember,
+  revokeTeamInvitation,
   saveCompanySettings,
   toggleSettingItem,
   updateCategory,
@@ -58,16 +62,23 @@ function ConfigurationList({
                 <p className="font-medium text-slate-800">{item.name}</p>
               )}
               {(item.description || item.defaultPriceCents !== undefined) && (
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {[
-                    item.description,
-                    item.defaultPriceCents !== undefined
-                      ? `$${(item.defaultPriceCents / 100).toFixed(2)}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
+                <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                  {item.description && (
+                    <span>{`${item.description}${item.defaultPriceCents !== undefined ? " · " : ""}`}</span>
+                  )}
+                  {item.defaultPriceCents !== undefined && (
+                    <span className="inline-flex items-center">
+                      ${(item.defaultPriceCents / 100).toFixed(2)}
+                      {kind === "service" && (
+                        <ServicePriceEditor
+                          id={item.id}
+                          name={item.name}
+                          priceCents={item.defaultPriceCents}
+                        />
+                      )}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
             <form action={toggleSettingItem}>
@@ -120,15 +131,26 @@ export default async function SettingsPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  await requireAdmin();
+  const admin = await requireTeamAdmin();
   const { error } = await searchParams;
-  const [company, categories, types, statuses, services] = await Promise.all([
-    prisma.companySettings.findUnique({ where: { id: "default" } }),
-    prisma.productCategory.findMany({ orderBy: { sortOrder: "asc" } }),
-    prisma.bookingType.findMany({ orderBy: { sortOrder: "asc" } }),
-    prisma.bookingStatus.findMany({ orderBy: { sortOrder: "asc" } }),
-    prisma.service.findMany({ orderBy: { sortOrder: "asc" } }),
-  ]);
+  const [company, categories, types, statuses, services, team, invitations, memberships] =
+    await Promise.all([
+      prisma.companySettings.findUnique({ where: { id: "default" } }),
+      prisma.productCategory.findMany({ orderBy: { sortOrder: "asc" } }),
+      prisma.bookingType.findMany({ orderBy: { sortOrder: "asc" } }),
+      prisma.bookingStatus.findMany({ orderBy: { sortOrder: "asc" } }),
+      prisma.service.findMany({ orderBy: { sortOrder: "asc" } }),
+      prisma.team.findUniqueOrThrow({ where: { id: admin.membership.teamId } }),
+      prisma.teamInvitation.findMany({
+        where: { teamId: admin.membership.teamId },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.teamMembership.findMany({
+        where: { teamId: admin.membership.teamId },
+        include: { user: { select: { id: true, email: true } } },
+        orderBy: { joinedAt: "asc" },
+      }),
+    ]);
   const fields = [
     ["name", "Company name"],
     ["email", "Email"],
@@ -243,6 +265,81 @@ export default async function SettingsPage({
         <ConfigurationList title="Booking types" kind="bookingType" items={types} />
         <ConfigurationList title="Booking statuses" kind="bookingStatus" items={statuses} />
         <ConfigurationList title="Services" kind="service" items={services} />
+      </section>
+      <section className="section-card mt-7">
+        <h2 className="text-base font-semibold text-slate-900">Team access</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Invite people to {team.name}. Members can only see bookings they create, own, or are
+          assigned to.
+        </p>
+        <TeamInvitationForm />
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Members</h3>
+            <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-100 px-3">
+              {memberships.map((membership) => (
+                <li
+                  className="flex items-center justify-between gap-3 py-3 text-sm"
+                  key={membership.id}
+                >
+                  <span>{membership.user.email}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                      {membership.role === "ADMIN" ? "Admin" : "Member"}
+                    </span>
+                    {membership.role === "MEMBER" && (
+                      <form action={removeTeamMember}>
+                        <input name="userId" type="hidden" value={membership.userId} />
+                        <button className="text-action text-red-700" type="submit">
+                          Remove
+                        </button>
+                      </form>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Invitations</h3>
+            <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-100 px-3">
+              {invitations.length === 0 ? (
+                <li className="py-3 text-sm text-slate-500">No invitations yet.</li>
+              ) : (
+                invitations.map((invitation) => {
+                  const state = invitation.usedAt
+                    ? "Used"
+                    : invitation.revokedAt
+                      ? "Revoked"
+                      : invitation.expiresAt && invitation.expiresAt <= new Date()
+                        ? "Expired"
+                        : "Pending";
+                  return (
+                    <li
+                      className="flex items-center justify-between gap-3 py-3 text-sm"
+                      key={invitation.id}
+                    >
+                      <span className="min-w-0 truncate">{invitation.recipientEmail}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                          {state}
+                        </span>
+                        {state === "Pending" && (
+                          <form action={revokeTeamInvitation}>
+                            <input name="id" type="hidden" value={invitation.id} />
+                            <button className="text-action text-red-700" type="submit">
+                              Revoke
+                            </button>
+                          </form>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          </div>
+        </div>
       </section>
     </AppShell>
   );

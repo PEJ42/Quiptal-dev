@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { addBookingActivity } from "@/lib/booking-service";
 import { contractSnapshotPdfModel, renderContractPdf, storeContract } from "@/lib/contracts";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireBookingAccess } from "@/lib/auth";
 import { companyLogosDirectory } from "@/lib/app-storage";
 import { contractTermsPlainText, sanitizeContractTerms } from "@/lib/contract-terms";
 import { hashContractSnapshot, type ContractSnapshot } from "@/lib/contract-snapshot";
@@ -27,8 +27,8 @@ async function companyLogo(reference: string | null | undefined) {
 }
 
 export async function generateContract(formData: FormData) {
-  const user = await requireAdmin();
   const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const { user } = await requireBookingAccess(bookingId);
   const [booking, settings, template] = await Promise.all([
     prisma.booking.findUnique({
       where: { id: bookingId },

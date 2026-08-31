@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { addBookingActivity, recalculateBooking } from "@/lib/booking-service";
 import { bookingDate, bookingSchema } from "@/lib/booking-schema";
-import { requireAdmin } from "@/lib/auth";
+import { requireBookingAccess, requireTeamAdmin, requireWorkspaceUser } from "@/lib/auth";
 import { dollarsToCents } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { markContractsForResignature } from "@/lib/signing";
@@ -14,7 +14,7 @@ function bookingNumber() {
   return `B-${new Date().getUTCFullYear()}-${String(Date.now()).slice(-6)}`;
 }
 export async function createBooking(formData: FormData) {
-  const user = await requireAdmin();
+  const user = await requireWorkspaceUser();
   const parsed = bookingSchema.safeParse({
     ...Object.fromEntries(formData),
     primaryContactId: formData.get("primaryContactId") || undefined,
@@ -28,6 +28,9 @@ export async function createBooking(formData: FormData) {
   const booking = await prisma.booking.create({
     data: {
       ...parsed.data,
+      teamId: user.membership.teamId,
+      createdByUserId: user.id,
+      ownerUserId: user.id,
       startDate: bookingDate(parsed.data.startDate),
       endDate: bookingDate(parsed.data.endDate),
       primaryContactId: parsed.data.primaryContactId || null,
@@ -50,8 +53,8 @@ export async function createBooking(formData: FormData) {
   redirect(`/bookings/${booking.id}`);
 }
 export async function addBookingLine(formData: FormData) {
-  const user = await requireAdmin();
   const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const { user } = await requireBookingAccess(bookingId);
   const [kindValue, sourceValue] = z.string().parse(formData.get("source")).split(":");
   const kind = z.enum(["PRODUCT", "BUNDLE", "SERVICE"]).parse(kindValue);
   const sourceId = z.string().cuid().parse(sourceValue);
@@ -129,8 +132,8 @@ export async function addBookingLine(formData: FormData) {
 }
 
 export async function saveBookingLineQuantities(formData: FormData) {
-  const user = await requireAdmin();
   const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const { user } = await requireBookingAccess(bookingId);
   const productLines = await prisma.bookingLine.findMany({
     where: { bookingId, lineType: "PRODUCT" },
     select: { id: true, quantity: true, unitPriceCents: true, priceOverrideCents: true },
@@ -162,8 +165,8 @@ export async function saveBookingLineQuantities(formData: FormData) {
 }
 
 export async function updateBookingLinePrice(formData: FormData) {
-  const user = await requireAdmin();
   const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const { user } = await requireBookingAccess(bookingId);
   const id = z.string().cuid().parse(formData.get("id"));
   const priceOverrideCents = z.coerce
     .number()
@@ -187,9 +190,9 @@ export async function updateBookingLinePrice(formData: FormData) {
   revalidatePath("/bookings");
 }
 export async function updateBookingLine(formData: FormData) {
-  const user = await requireAdmin();
-  const id = z.string().cuid().parse(formData.get("id"));
   const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const { user } = await requireBookingAccess(bookingId);
+  const id = z.string().cuid().parse(formData.get("id"));
   const quantity = z.coerce.number().int().min(1).parse(formData.get("quantity"));
   const unitPriceCents = z.coerce.number().int().min(0).parse(formData.get("unitPriceCents"));
   await prisma.bookingLine.update({
@@ -207,8 +210,8 @@ export async function updateBookingLine(formData: FormData) {
 }
 
 export async function revertBookingToContractValues(formData: FormData) {
-  const user = await requireAdmin();
   const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const { user } = await requireBookingAccess(bookingId);
   const contractId = z.string().cuid().parse(formData.get("contractId"));
   const contract = await prisma.generatedContract.findFirst({
     where: { id: contractId, bookingId },
@@ -272,9 +275,9 @@ export async function revertBookingToContractValues(formData: FormData) {
   revalidatePath("/contracts");
 }
 export async function removeBookingLine(formData: FormData) {
-  const user = await requireAdmin();
   const id = z.string().cuid().parse(formData.get("id"));
   const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const { user } = await requireBookingAccess(bookingId);
   const removed = await prisma.$transaction(async (tx) => {
     const line = await tx.bookingLine.findFirst({
       where: { id, bookingId },
@@ -306,8 +309,8 @@ export async function removeBookingLine(formData: FormData) {
   revalidatePath("/bookings");
 }
 export async function updateBookingStatus(formData: FormData) {
-  const user = await requireAdmin();
   const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const { user } = await requireBookingAccess(bookingId);
   const bookingStatusId = z.string().cuid().parse(formData.get("bookingStatusId"));
   await prisma.booking.update({ where: { id: bookingId }, data: { bookingStatusId } });
   await addBookingActivity(bookingId, user.id, "STATUS_CHANGED", "Booking status changed");
@@ -316,8 +319,8 @@ export async function updateBookingStatus(formData: FormData) {
 }
 
 export async function updateBookingPricing(formData: FormData) {
-  const user = await requireAdmin();
   const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const { user } = await requireBookingAccess(bookingId);
   const discountType = z
     .enum(["FIXED", "PERCENT"])
     .optional()
@@ -360,4 +363,57 @@ export async function updateBookingPricing(formData: FormData) {
   await addBookingActivity(bookingId, user.id, "PRICING_UPDATED", "Booking pricing updated");
   revalidatePath(`/bookings/${bookingId}`);
   revalidatePath("/bookings");
+}
+
+export async function assignBookingOwner(formData: FormData) {
+  const admin = await requireTeamAdmin();
+  const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const ownerUserId = z.string().cuid().parse(formData.get("ownerUserId"));
+  const membership = await prisma.teamMembership.findFirst({
+    where: { userId: ownerUserId, teamId: admin.membership.teamId },
+    select: { userId: true },
+  });
+  if (!membership) return;
+  await prisma.booking.updateMany({
+    where: { id: bookingId, teamId: admin.membership.teamId },
+    data: { ownerUserId },
+  });
+  revalidatePath(`/bookings/${bookingId}`);
+  revalidatePath("/bookings");
+}
+
+export async function addBookingMember(formData: FormData) {
+  const admin = await requireTeamAdmin();
+  const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const userId = z.string().cuid().parse(formData.get("userId"));
+  const [booking, membership] = await Promise.all([
+    prisma.booking.findFirst({
+      where: { id: bookingId, teamId: admin.membership.teamId },
+      select: { id: true },
+    }),
+    prisma.teamMembership.findFirst({
+      where: { userId, teamId: admin.membership.teamId },
+      select: { userId: true },
+    }),
+  ]);
+  if (!booking || !membership) return;
+  await prisma.bookingMember.upsert({
+    where: { bookingId_userId: { bookingId, userId } },
+    update: {},
+    create: { bookingId, userId },
+  });
+  revalidatePath(`/bookings/${bookingId}`);
+}
+
+export async function removeBookingMember(formData: FormData) {
+  const admin = await requireTeamAdmin();
+  const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const userId = z.string().cuid().parse(formData.get("userId"));
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, teamId: admin.membership.teamId },
+    select: { id: true },
+  });
+  if (!booking) return;
+  await prisma.bookingMember.deleteMany({ where: { bookingId, userId } });
+  revalidatePath(`/bookings/${bookingId}`);
 }

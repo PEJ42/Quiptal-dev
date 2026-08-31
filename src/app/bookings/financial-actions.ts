@@ -12,14 +12,14 @@ import {
   releaseDeposit,
 } from "@/lib/payment-service";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth";
+import { requireBookingAccess } from "@/lib/auth";
 import { createSigningLink } from "@/lib/signing";
 
 const bookingIdFrom = (formData: FormData) => z.string().cuid().parse(formData.get("bookingId"));
 
 export async function createCustomerSigningLink(formData: FormData) {
-  const user = await requireAdmin();
   const bookingId = bookingIdFrom(formData);
+  const { user } = await requireBookingAccess(bookingId);
   const contract = await prisma.generatedContract.findFirst({
     where: {
       bookingId,
@@ -40,8 +40,8 @@ export async function createCustomerSigningLink(formData: FormData) {
 }
 
 export async function revokeSigningLinks(formData: FormData) {
-  const user = await requireAdmin();
   const bookingId = bookingIdFrom(formData);
+  const { user } = await requireBookingAccess(bookingId);
   await prisma.signingLink.updateMany({
     where: { bookingId, revokedAt: null },
     data: { revokedAt: new Date() },
@@ -56,8 +56,8 @@ export async function revokeSigningLinks(formData: FormData) {
 }
 
 export async function createPaymentLink(formData: FormData) {
-  const user = await requireAdmin();
   const bookingId = bookingIdFrom(formData);
+  const { user } = await requireBookingAccess(bookingId);
   const contract = await prisma.generatedContract.findFirst({
     where: { bookingId, status: "SIGNED" },
     orderBy: { version: "desc" },
@@ -79,8 +79,8 @@ export async function createPaymentLink(formData: FormData) {
 }
 
 export async function authorizeBookingDeposit(formData: FormData) {
-  const user = await requireAdmin();
   const bookingId = bookingIdFrom(formData);
+  const { user } = await requireBookingAccess(bookingId);
   const deposit = await authorizeDeposit(bookingId);
   await addBookingActivity(
     bookingId,
@@ -93,8 +93,8 @@ export async function authorizeBookingDeposit(formData: FormData) {
 }
 
 export async function releaseBookingDeposit(formData: FormData) {
-  const user = await requireAdmin();
   const bookingId = bookingIdFrom(formData);
+  const { user } = await requireBookingAccess(bookingId);
   const depositId = z.string().cuid().parse(formData.get("depositId"));
   await releaseDeposit(depositId);
   await addBookingActivity(
@@ -108,8 +108,8 @@ export async function releaseBookingDeposit(formData: FormData) {
 }
 
 export async function captureBookingDeposit(formData: FormData) {
-  const user = await requireAdmin();
   const bookingId = bookingIdFrom(formData);
+  const { user } = await requireBookingAccess(bookingId);
   const depositId = z.string().cuid().parse(formData.get("depositId"));
   const amountCents = z.coerce.number().int().min(1).parse(formData.get("amountCents"));
   const reason = z.string().trim().min(3).max(500).parse(formData.get("reason"));
@@ -123,8 +123,8 @@ export async function captureBookingDeposit(formData: FormData) {
 }
 
 export async function refundBookingDeposit(formData: FormData) {
-  const user = await requireAdmin();
   const bookingId = bookingIdFrom(formData);
+  const { user } = await requireBookingAccess(bookingId);
   const depositId = z.string().cuid().parse(formData.get("depositId"));
   const amountCents = z.coerce.number().int().min(1).parse(formData.get("amountCents"));
   const reason = z.string().trim().min(3).max(500).parse(formData.get("reason"));

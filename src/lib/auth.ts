@@ -4,12 +4,19 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { bookingVisibilityWhere } from "@/lib/team-access";
+
+export { bookingVisibilityWhere } from "@/lib/team-access";
 
 const SESSION_COOKIE = "rental_booking_session";
 const SESSION_DAYS = 14;
 
-function hashToken(token: string) {
+export function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+export function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
 }
 
 export async function hasAdmin() {
@@ -41,10 +48,41 @@ export async function currentUser() {
   return session.user;
 }
 
-export async function requireAdmin() {
+export async function requireWorkspaceUser() {
   const user = await currentUser();
-  if (!user || user.role !== "ADMIN") redirect("/login");
+  if (!user) redirect("/login");
+  const memberships = await prisma.teamMembership.findMany({
+    where: { userId: user.id },
+    orderBy: { joinedAt: "asc" },
+    select: { teamId: true, role: true },
+  });
+  const membership =
+    memberships.find((candidate) => candidate.teamId === user.activeTeamId) ?? memberships[0];
+  if (!membership) redirect("/setup");
+  if (user.activeTeamId !== membership.teamId) {
+    await prisma.user.update({ where: { id: user.id }, data: { activeTeamId: membership.teamId } });
+  }
+  return { ...user, membership };
+}
+
+export async function requireBookingAccess(bookingId: string) {
+  const user = await requireWorkspaceUser();
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, ...bookingVisibilityWhere(user) },
+    select: { id: true, teamId: true, createdByUserId: true, ownerUserId: true },
+  });
+  if (!booking) redirect("/bookings");
+  return { user, booking };
+}
+
+export async function requireTeamAdmin() {
+  const user = await requireWorkspaceUser();
+  if (user.membership.role !== "ADMIN") redirect("/");
   return user;
+}
+
+export async function requireAdmin() {
+  return requireTeamAdmin();
 }
 
 export async function signOut() {

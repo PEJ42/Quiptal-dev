@@ -1,15 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { requireAdmin } from "@/lib/auth";
+import { bookingVisibilityWhere, requireWorkspaceUser } from "@/lib/auth";
 import { signatureDeviceLabel } from "@/lib/contracts";
 import { prisma } from "@/lib/prisma";
 
 export default async function ContractViewerPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireAdmin();
+  const user = await requireWorkspaceUser();
   const { id } = await params;
-  const contract = await prisma.generatedContract.findUnique({
-    where: { id },
+  const contract = await prisma.generatedContract.findFirst({
+    where: { id, booking: bookingVisibilityWhere(user) },
     include: { booking: { include: { customer: true } }, signature: true },
   });
   if (!contract) notFound();

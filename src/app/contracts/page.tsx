@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { ContractTermsEditor } from "@/components/contract-terms-editor";
-import { requireAdmin } from "@/lib/auth";
+import { bookingVisibilityWhere, requireWorkspaceUser } from "@/lib/auth";
 import { contractTermsToEditorHtml } from "@/lib/contract-terms";
 import { prisma } from "@/lib/prisma";
 import { saveContractTemplate } from "./actions";
@@ -11,10 +11,16 @@ function statusLabel(status: string) {
 }
 
 export default async function ContractsPage() {
-  await requireAdmin();
+  const user = await requireWorkspaceUser();
   const [template, contracts] = await Promise.all([
-    prisma.contractTemplate.findFirst({ where: { isActive: true }, orderBy: { version: "desc" } }),
+    user.membership.role === "ADMIN"
+      ? prisma.contractTemplate.findFirst({
+          where: { isActive: true },
+          orderBy: { version: "desc" },
+        })
+      : null,
     prisma.generatedContract.findMany({
+      where: { booking: bookingVisibilityWhere(user) },
       include: { booking: { include: { customer: true } } },
       orderBy: { generatedAt: "desc" },
     }),
@@ -33,7 +39,7 @@ export default async function ContractsPage() {
           {contracts.length} {contracts.length === 1 ? "contract" : "contracts"}
         </span>
       </header>
-      {template && (
+      {template && user.membership.role === "ADMIN" && (
         <section className="section-card mt-7">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>

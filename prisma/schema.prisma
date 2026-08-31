@@ -19,6 +19,52 @@ model User {
   sessions           Session[]
   bookingActivities  BookingActivity[]
   generatedContracts GeneratedContract[]
+  memberships        TeamMembership[]
+  createdBookings    Booking[]          @relation("BookingCreator")
+  ownedBookings      Booking[]          @relation("BookingOwner")
+  bookingMemberships BookingMember[]
+  invitationsCreated TeamInvitation[]   @relation("InvitationCreator")
+  activeTeamId       String?
+}
+
+model Team {
+  id          String           @id @default(cuid())
+  name        String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  memberships TeamMembership[]
+  invitations TeamInvitation[]
+  bookings    Booking[]
+}
+
+model TeamMembership {
+  id       String   @id @default(cuid())
+  userId   String
+  teamId   String
+  role     String   @default("MEMBER")
+  joinedAt DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team     Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@index([teamId, role])
+}
+
+model TeamInvitation {
+  id             String   @id @default(cuid())
+  teamId         String
+  recipientEmail String
+  tokenHash      String   @unique
+  createdById    String
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime?
+  usedAt         DateTime?
+  revokedAt      DateTime?
+  team           Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy      User     @relation("InvitationCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([teamId, recipientEmail])
+  @@index([recipientEmail])
 }
 
 model Session {
@@ -189,6 +235,9 @@ model Booking {
   bookingNumber                String                 @unique
   title                        String?
   customerId                   String
+  teamId                       String?
+  createdByUserId              String?
+  ownerUserId                  String?
   primaryContactId             String?
   startDate                    DateTime
   endDate                      DateTime
@@ -220,6 +269,10 @@ model Booking {
   createdAt                    DateTime               @default(now())
   updatedAt                    DateTime               @updatedAt
   customer                     Customer               @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  team                         Team?                  @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  createdByUser                User?                  @relation("BookingCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  ownerUser                    User?                  @relation("BookingOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  members                      BookingMember[]
   primaryContact               CustomerContact?       @relation(fields: [primaryContactId], references: [id], onDelete: Restrict)
   bookingType                  BookingType            @relation(fields: [bookingTypeId], references: [id], onDelete: Restrict)
   bookingStatus                BookingStatus          @relation(fields: [bookingStatusId], references: [id], onDelete: Restrict)
@@ -232,10 +285,25 @@ model Booking {
   signingLinks                 SigningLink[]
 
   @@index([customerId])
+  @@index([teamId])
+  @@index([createdByUserId])
+  @@index([ownerUserId])
   @@index([startDate])
   @@index([bookingStatusId])
   @@index([bookingTypeId])
   @@index([archivedAt])
+}
+
+model BookingMember {
+  id        String   @id @default(cuid())
+  bookingId String
+  userId    String
+  createdAt DateTime @default(now())
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, userId])
+  @@index([userId])
 }
 
 model BookingLine {

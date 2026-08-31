@@ -1,15 +1,15 @@
 import { readFile } from "fs/promises";
 import { notFound } from "next/navigation";
-import { requireAdmin } from "@/lib/auth";
+import { bookingVisibilityWhere, requireWorkspaceUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { addBookingActivity } from "@/lib/booking-service";
 import { contractsDirectory } from "@/lib/app-storage";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireAdmin();
+  const user = await requireWorkspaceUser();
   const id = (await params).id;
-  const contract = await prisma.generatedContract.findUnique({
-    where: { id },
+  const contract = await prisma.generatedContract.findFirst({
+    where: { id, booking: bookingVisibilityWhere(user) },
     include: { booking: true },
   });
   if (!contract || !/^[a-f0-9-]{36}\.pdf$/.test(contract.fileReference)) notFound();

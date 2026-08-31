@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { BookingLinesEditor } from "@/components/booking-lines-editor";
-import { requireAdmin } from "@/lib/auth";
+import { bookingVisibilityWhere, requireWorkspaceUser } from "@/lib/auth";
 import { centsToDollars } from "@/lib/money";
 import { recommendedSecurityDepositCents, replacementValueCents } from "@/lib/pricing";
 import { prisma } from "@/lib/prisma";
@@ -17,6 +17,9 @@ import {
   revokeSigningLinks,
 } from "../financial-actions";
 import {
+  addBookingMember,
+  assignBookingOwner,
+  removeBookingMember,
   revertBookingToContractValues,
   updateBookingPricing,
   updateBookingStatus,
@@ -29,17 +32,19 @@ export default async function BookingPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ signingLink?: string; error?: string }>;
 }) {
-  await requireAdmin();
   const { id } = await params;
+  const user = await requireWorkspaceUser();
   const [booking, products, bundles, statuses, query] = await Promise.all([
-    prisma.booking.findUnique({
-      where: { id },
+    prisma.booking.findFirst({
+      where: { id, ...bookingVisibilityWhere(user) },
       include: {
         customer: true,
         bookingType: true,
         bookingStatus: true,
         lines: { include: { bundleComponentSnapshots: true }, orderBy: { displayOrder: "asc" } },
         activities: { include: { user: true }, orderBy: { createdAt: "desc" } },
+        ownerUser: { select: { id: true, email: true } },
+        members: { include: { user: { select: { id: true, email: true } } } },
         generatedContracts: { orderBy: { version: "desc" } },
         payments: { orderBy: { createdAt: "desc" } },
         savedPaymentMethods: { orderBy: { createdAt: "desc" } },
@@ -52,6 +57,14 @@ export default async function BookingPage({
     searchParams,
   ]);
   if (!booking) notFound();
+  const teamMembers =
+    user.membership.role === "ADMIN"
+      ? await prisma.teamMembership.findMany({
+          where: { teamId: user.membership.teamId },
+          include: { user: { select: { id: true, email: true } } },
+          orderBy: { joinedAt: "asc" },
+        })
+      : [];
   const replacementValue = replacementValueCents(booking.lines);
   const recommendedDeposit = recommendedSecurityDepositCents(booking.lines);
   const isAutomaticDeposit = booking.securityDepositOverrideCents === null;
@@ -125,6 +138,74 @@ export default async function BookingPage({
             .join(", ") || "No billing address saved."}
         </p>
         {booking.notes && <p className="mt-2 text-slate-600">Notes: {booking.notes}</p>}
+      </section>
+      <section className="section-card mt-6">
+        <h2 className="text-base font-semibold text-slate-800">Booking access</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Owner: {booking.ownerUser?.email ?? "Unassigned"}
+        </p>
+        {booking.members.length > 0 && (
+          <p className="mt-1 text-sm text-slate-600">
+            Members: {booking.members.map((member) => member.user.email).join(", ")}
+          </p>
+        )}
+        {user.membership.role === "ADMIN" && (
+          <div className="mt-4 grid gap-3 sm:max-w-xl">
+            <form action={assignBookingOwner} className="flex flex-wrap items-end gap-2">
+              <input name="bookingId" type="hidden" value={id} />
+              <label className="grid gap-1 text-sm text-slate-700">
+                Owner
+                <select
+                  className="min-h-10 rounded-lg border border-slate-200 bg-white px-3"
+                  defaultValue={booking.ownerUserId ?? ""}
+                  name="ownerUserId"
+                >
+                  {teamMembers.map((membership) => (
+                    <option key={membership.userId} value={membership.userId}>
+                      {membership.user.email}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="secondary-button" type="submit">
+                Save owner
+              </button>
+            </form>
+            <form action={addBookingMember} className="flex flex-wrap items-end gap-2">
+              <input name="bookingId" type="hidden" value={id} />
+              <label className="grid gap-1 text-sm text-slate-700">
+                Add member
+                <select
+                  className="min-h-10 rounded-lg border border-slate-200 bg-white px-3"
+                  name="userId"
+                >
+                  {teamMembers.map((membership) => (
+                    <option key={membership.userId} value={membership.userId}>
+                      {membership.user.email}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="secondary-button" type="submit">
+                Add
+              </button>
+            </form>
+            {booking.members.map((member) => (
+              <form
+                action={removeBookingMember}
+                className="flex items-center gap-2 text-sm"
+                key={member.id}
+              >
+                <input name="bookingId" type="hidden" value={id} />
+                <input name="userId" type="hidden" value={member.userId} />
+                <span>{member.user.email}</span>
+                <button className="text-action text-red-700" type="submit">
+                  Remove
+                </button>
+              </form>
+            ))}
+          </div>
+        )}
       </section>
       <section className="section-card mt-6">
         <h2 className="text-base font-semibold text-slate-800">Booking lines</h2>

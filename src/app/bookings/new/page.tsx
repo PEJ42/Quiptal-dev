@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { requireAdmin } from "@/lib/auth";
+import { requireWorkspaceUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createBooking } from "../actions";
 
@@ -9,7 +9,7 @@ export default async function NewBookingPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  await requireAdmin();
+  await requireWorkspaceUser();
   const [customers, types, statuses, settings, { error }] = await Promise.all([
     prisma.customer.findMany({
       where: { archivedAt: null },

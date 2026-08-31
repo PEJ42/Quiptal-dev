@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { isUpcomingBooking } from "@/lib/booking-schema";
-import { requireAdmin } from "@/lib/auth";
+import { bookingVisibilityWhere, requireWorkspaceUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -45,25 +45,30 @@ export default async function BookingsPage({
 }: {
   searchParams: Promise<{ q?: string; statusId?: string; typeId?: string; past?: string }>;
 }) {
-  await requireAdmin();
+  const user = await requireWorkspaceUser();
   const { q = "", statusId, typeId, past } = await searchParams;
   const [bookings, statuses, types, metricBookings] = await Promise.all([
     prisma.booking.findMany({
       where: {
-        archivedAt: null,
-        ...(statusId ? { bookingStatusId: statusId } : {}),
-        ...(typeId ? { bookingTypeId: typeId } : {}),
-        ...(q
-          ? {
-              OR: [
-                { bookingNumber: { contains: q } },
-                { title: { contains: q } },
-                { customer: { firstName: { contains: q } } },
-                { customer: { lastName: { contains: q } } },
-                { customer: { email: { contains: q } } },
-              ],
-            }
-          : {}),
+        AND: [
+          bookingVisibilityWhere(user),
+          {
+            archivedAt: null,
+            ...(statusId ? { bookingStatusId: statusId } : {}),
+            ...(typeId ? { bookingTypeId: typeId } : {}),
+            ...(q
+              ? {
+                  OR: [
+                    { bookingNumber: { contains: q } },
+                    { title: { contains: q } },
+                    { customer: { firstName: { contains: q } } },
+                    { customer: { lastName: { contains: q } } },
+                    { customer: { email: { contains: q } } },
+                  ],
+                }
+              : {}),
+          },
+        ],
       },
       include: {
         customer: true,
@@ -76,7 +81,7 @@ export default async function BookingsPage({
     prisma.bookingStatus.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
     prisma.bookingType.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
     prisma.booking.findMany({
-      where: { archivedAt: null },
+      where: { AND: [bookingVisibilityWhere(user), { archivedAt: null }] },
       select: { startDate: true, totalCents: true, customerId: true },
     }),
   ]);

@@ -8,4 +8,10 @@ Use server components by default. Client components are limited to forms, mobile
 
 Desktop navigation is Dashboard, Bookings, Customers, Catalog, Products, Bundles, Contracts, Settings; mobile uses compact accessible navigation. Bookings is operationally central. Catalog browses products/bundles while management remains separate. No calendar route is planned.
 
-Booking lines and bundle component snapshots preserve historical catalog values. Contract records preserve a booking/template snapshot and opaque protected file reference. Normal deletion is archival. Admin is the only active MVP role, with future role extension allowed by the model.
+Booking lines and bundle component snapshots preserve historical catalog values. Contract records preserve a booking/template snapshot and opaque protected file reference. Normal deletion is archival.
+
+## Teams and booking access
+
+Every account has an active workspace. A public account creates its own workspace and becomes its only admin. Admins can make a one-time, recipient-email-bound invitation for their workspace. The token stored in the database is a SHA-256 hash; the plain invitation link is shown to the administrator only when it is created.
+
+Invited people use the ordinary sign-up or sign-in route. The application checks the normalized email address, atomically marks the invitation used, creates a standard membership, and selects the inviting workspace. Standard members can create bookings, and they only see bookings where they are the creator, owner, or an explicit booking member. Admins see all bookings in their workspace. Contracts and payments inherit their booking's server-side access check, including direct URL access, search, dashboard totals, and downloads.

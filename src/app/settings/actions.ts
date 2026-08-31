@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireTeamAdmin } from "@/lib/auth";
+import { createInvitation } from "@/lib/invitations";
+import { dollarsToCents } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { saveCompanyLogo } from "@/lib/upload-storage";
 
@@ -131,5 +133,63 @@ export async function toggleSettingItem(formData: FormData) {
   if (kind === "bookingStatus")
     await prisma.bookingStatus.update({ where: { id }, data: { isActive } });
   if (kind === "service") await prisma.service.update({ where: { id }, data: { isActive } });
+  revalidatePath("/settings");
+}
+
+export async function updateServicePrice(formData: FormData) {
+  await requireAdmin();
+  const id = z.string().cuid().safeParse(formData.get("id"));
+  const priceCents = z
+    .number()
+    .int()
+    .min(0)
+    .max(10_000_000)
+    .safeParse(dollarsToCents(formData.get("priceDollars")));
+  if (!id.success || !priceCents.success) return;
+  await prisma.service.update({
+    where: { id: id.data },
+    data: { defaultPriceCents: priceCents.data },
+  });
+  revalidatePath("/settings");
+}
+
+export type InvitationActionState = { error?: string; token?: string };
+
+export async function createTeamInvitation(
+  _state: InvitationActionState,
+  formData: FormData,
+): Promise<InvitationActionState> {
+  const admin = await requireTeamAdmin();
+  const parsed = z.object({ email: z.string().trim().pipe(z.email()) }).safeParse({
+    email: formData.get("email"),
+  });
+  if (!parsed.success) return { error: "Enter a valid email address." };
+  const { token } = await createInvitation({
+    teamId: admin.membership.teamId,
+    createdById: admin.id,
+    recipientEmail: parsed.data.email,
+    expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+  });
+  revalidatePath("/settings");
+  return { token };
+}
+
+export async function revokeTeamInvitation(formData: FormData) {
+  const admin = await requireTeamAdmin();
+  const id = z.string().cuid().parse(formData.get("id"));
+  await prisma.teamInvitation.updateMany({
+    where: { id, teamId: admin.membership.teamId, usedAt: null, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+  revalidatePath("/settings");
+}
+
+export async function removeTeamMember(formData: FormData) {
+  const admin = await requireTeamAdmin();
+  const userId = z.string().cuid().parse(formData.get("userId"));
+  if (userId === admin.id) return;
+  await prisma.teamMembership.deleteMany({
+    where: { userId, teamId: admin.membership.teamId, role: "MEMBER" },
+  });
   revalidatePath("/settings");
 }

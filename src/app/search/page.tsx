@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { requireAdmin } from "@/lib/auth";
+import { bookingVisibilityWhere, requireWorkspaceUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const maxResults = 8;
@@ -21,7 +21,7 @@ export default async function SearchPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  await requireAdmin();
+  const user = await requireWorkspaceUser();
   const rawQuery = (await searchParams).q ?? "";
   const q = rawQuery.trim().slice(0, 80);
   const hasQuery = q.length > 0;
@@ -29,13 +29,18 @@ export default async function SearchPage({
     ? await Promise.all([
         prisma.booking.findMany({
           where: {
-            archivedAt: null,
-            OR: [
-              { bookingNumber: { contains: q } },
-              { title: { contains: q } },
-              { customer: { firstName: { contains: q } } },
-              { customer: { lastName: { contains: q } } },
-              { customer: { email: { contains: q } } },
+            AND: [
+              bookingVisibilityWhere(user),
+              {
+                archivedAt: null,
+                OR: [
+                  { bookingNumber: { contains: q } },
+                  { title: { contains: q } },
+                  { customer: { firstName: { contains: q } } },
+                  { customer: { lastName: { contains: q } } },
+                  { customer: { email: { contains: q } } },
+                ],
+              },
             ],
           },
           include: { customer: true, bookingType: true },

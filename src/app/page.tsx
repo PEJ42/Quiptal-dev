@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { requireAdmin } from "@/lib/auth";
+import { bookingVisibilityWhere, requireWorkspaceUser } from "@/lib/auth";
 import { calculateDashboardMetrics } from "@/lib/dashboard";
 import { isUpcomingBooking } from "@/lib/booking-schema";
 import { prisma } from "@/lib/prisma";
@@ -14,9 +14,9 @@ const date = new Intl.DateTimeFormat("en-US", {
 });
 
 export default async function Home() {
-  await requireAdmin();
+  const user = await requireWorkspaceUser();
   const bookings = await prisma.booking.findMany({
-    where: { archivedAt: null },
+    where: { AND: [bookingVisibilityWhere(user), { archivedAt: null }] },
     include: { customer: true, bookingStatus: true, bookingType: true },
     orderBy: { startDate: "asc" },
   });
