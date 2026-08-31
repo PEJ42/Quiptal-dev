@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createSession, passwordMatches } from "@/lib/auth";
 import { credentialsSchema } from "@/lib/auth-schemas";
+import { attachPendingBookingUsers } from "@/lib/booking-users";
 import { invitationState, redeemInvitation } from "@/lib/invitations";
 import { prisma } from "@/lib/prisma";
 
@@ -25,6 +26,7 @@ export async function signIn(formData: FormData) {
     const redeemed = await redeemInvitation({ token: invite, userId: user.id, email: user.email });
     if (redeemed.state !== "valid") redirect(`/login?error=${redeemed.state}`);
   }
+  await attachPendingBookingUsers(user.id, user.email);
   await createSession(user.id);
   redirect("/");
 }

@@ -23,6 +23,9 @@ model User {
   createdBookings    Booking[]          @relation("BookingCreator")
   ownedBookings      Booking[]          @relation("BookingOwner")
   bookingMemberships BookingMember[]
+  completedChecklistSteps BookingChecklistStep[] @relation("ChecklistStepCompletedBy")
+  completedChecklists    BookingChecklist[]     @relation("ChecklistCompletedBy")
+  checklistLinksCreated  BookingChecklistLink[] @relation("ChecklistLinkCreatedBy")
   invitationsCreated TeamInvitation[]   @relation("InvitationCreator")
   activeTeamId       String?
 }
@@ -283,6 +286,9 @@ model Booking {
   savedPaymentMethods          SavedPaymentMethod[]
   depositAuthorizations        DepositAuthorization[]
   signingLinks                 SigningLink[]
+  checklists                   BookingChecklist[]
+  checklistLinks               BookingChecklistLink[]
+  pendingUserEmails            PendingBookingUserEmail[]
 
   @@index([customerId])
   @@index([teamId])
@@ -304,6 +310,84 @@ model BookingMember {
 
   @@unique([bookingId, userId])
   @@index([userId])
+}
+
+model PendingBookingUserEmail {
+  id              String   @id @default(cuid())
+  bookingId       String
+  normalizedEmail String
+  createdAt       DateTime @default(now())
+  booking         Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, normalizedEmail])
+  @@index([normalizedEmail])
+}
+
+model BookingChecklist {
+  id                String                 @id @default(cuid())
+  bookingId         String
+  flow              String
+  status            String                 @default("INCOMPLETE")
+  currentStep       Int                    @default(0)
+  completedAt       DateTime?
+  completedByUserId String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  booking           Booking                @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  completedByUser   User?                  @relation("ChecklistCompletedBy", fields: [completedByUserId], references: [id], onDelete: Restrict)
+  steps             BookingChecklistStep[]
+  photos            BookingChecklistPhoto[]
+
+  @@unique([bookingId, flow])
+  @@index([bookingId])
+}
+
+model BookingChecklistStep {
+  id                String                   @id @default(cuid())
+  checklistId       String
+  stepKey           String
+  displayOrder      Int
+  status            String                   @default("INCOMPLETE")
+  damageReport      String?
+  completedAt       DateTime?
+  completedByUserId String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  checklist         BookingChecklist         @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  completedByUser   User?                    @relation("ChecklistStepCompletedBy", fields: [completedByUserId], references: [id], onDelete: Restrict)
+  photos            BookingChecklistPhoto[]
+
+  @@unique([checklistId, stepKey])
+  @@unique([checklistId, displayOrder])
+  @@index([checklistId])
+}
+
+model BookingChecklistPhoto {
+  id          String               @id @default(cuid())
+  checklistId String
+  stepId      String
+  fileReference String             @unique
+  createdAt   DateTime             @default(now())
+  checklist   BookingChecklist     @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  step        BookingChecklistStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  @@index([checklistId])
+  @@index([stepId])
+}
+
+model BookingChecklistLink {
+  id              String   @id @default(cuid())
+  bookingId       String
+  flow            String
+  tokenHash       String   @unique
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  revokedAt       DateTime?
+  invalidatedAt   DateTime?
+  booking         Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  createdByUser   User     @relation("ChecklistLinkCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([bookingId, flow])
 }
 
 model BookingLine {

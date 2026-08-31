@@ -13,3 +13,4 @@ export const appDataDirectory = path.resolve(
 export const catalogUploadsDirectory = path.join(appDataDirectory, "uploads");
 export const companyLogosDirectory = path.join(appDataDirectory, "company-logos");
 export const contractsDirectory = path.join(appDataDirectory, "contracts");
+export const checklistUploadsDirectory = path.join(appDataDirectory, "checklist-uploads");

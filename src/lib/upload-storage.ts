@@ -2,7 +2,11 @@ import "server-only";
 
 import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
-import { catalogUploadsDirectory, companyLogosDirectory } from "@/lib/app-storage";
+import {
+  catalogUploadsDirectory,
+  checklistUploadsDirectory,
+  companyLogosDirectory,
+} from "@/lib/app-storage";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const extensions: Record<string, string> = {
@@ -22,6 +26,21 @@ export async function saveCatalogImage(file: File | null) {
 }
 
 export const catalogImageConstraints = "JPEG, PNG, or WebP; maximum 5 MB.";
+
+export async function saveChecklistPhoto(file: File | null) {
+  if (!file || file.size === 0) return null;
+  const extension = extensions[file.type];
+  if (!extension || file.size > MAX_IMAGE_BYTES) throw new Error("Invalid checklist photo.");
+  const filename = `${randomUUID()}.${extension}`;
+  await mkdir(checklistUploadsDirectory, { recursive: true });
+  await writeFile(
+    `${checklistUploadsDirectory}/${filename}`,
+    Buffer.from(await file.arrayBuffer()),
+  );
+  return filename;
+}
+
+export const checklistPhotoConstraints = "JPEG, PNG, or WebP; maximum 5 MB each.";
 
 const companyLogoExtensions: Record<string, string> = {
   "image/jpeg": "jpg",

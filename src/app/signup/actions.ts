@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createSession, passwordHash } from "@/lib/auth";
 import { credentialsSchema } from "@/lib/auth-schemas";
+import { attachPendingBookingUsers } from "@/lib/booking-users";
 import { createInvitedUser, InvitationRedemptionError, invitationState } from "@/lib/invitations";
 import { prisma } from "@/lib/prisma";
 
@@ -38,6 +39,7 @@ export async function createAccount(formData: FormData) {
       }
       throw error;
     }
+    await attachPendingBookingUsers(user.id, user.email);
     await createSession(user.id);
     redirect("/");
   }
@@ -59,6 +61,7 @@ export async function createAccount(formData: FormData) {
     });
     return created;
   });
+  await attachPendingBookingUsers(user.id, user.email);
   await createSession(user.id);
   redirect("/");
 }

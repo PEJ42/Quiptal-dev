@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { BookingChecklists } from "@/components/booking-checklists";
 import { BookingLinesEditor } from "@/components/booking-lines-editor";
 import { bookingVisibilityWhere, requireWorkspaceUser } from "@/lib/auth";
 import { centsToDollars } from "@/lib/money";
@@ -30,7 +31,7 @@ export default async function BookingPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ signingLink?: string; error?: string }>;
+  searchParams: Promise<{ signingLink?: string; error?: string; checklistError?: string }>;
 }) {
   const { id } = await params;
   const user = await requireWorkspaceUser();
@@ -49,6 +50,13 @@ export default async function BookingPage({
         payments: { orderBy: { createdAt: "desc" } },
         savedPaymentMethods: { orderBy: { createdAt: "desc" } },
         depositAuthorizations: { orderBy: { createdAt: "desc" } },
+        checklists: {
+          include: {
+            completedByUser: { select: { email: true } },
+            steps: { include: { photos: true }, orderBy: { displayOrder: "asc" } },
+          },
+        },
+        checklistLinks: { where: { revokedAt: null, invalidatedAt: null } },
       },
     }),
     prisma.product.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" } }),
@@ -107,6 +115,17 @@ export default async function BookingPage({
         <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           This contract cannot be restored automatically because its item list is different from the
           current booking. You can still use it as a reference or generate a new contract.
+        </p>
+      )}
+      {query.checklistError && (
+        <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {query.checklistError === "photos"
+            ? "Upload at least one photo before completing this step."
+            : query.checklistError === "contract"
+              ? "A signed contract is required before completing this step."
+              : query.checklistError === "manual"
+                ? "Confirm the manual step before marking it complete."
+                : "Complete all earlier steps before confirming the checklist."}
         </p>
       )}
       <section className="section-card mt-7 text-sm">
@@ -207,6 +226,11 @@ export default async function BookingPage({
           </div>
         )}
       </section>
+      <BookingChecklists
+        activeFlows={booking.checklistLinks.map((link) => link.flow)}
+        bookingId={id}
+        checklists={booking.checklists}
+      />
       <section className="section-card mt-6">
         <h2 className="text-base font-semibold text-slate-800">Booking lines</h2>
         <BookingLinesEditor
