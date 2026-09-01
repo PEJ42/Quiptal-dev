@@ -226,11 +226,6 @@ export default async function BookingPage({
           </div>
         )}
       </section>
-      <BookingChecklists
-        activeFlows={booking.checklistLinks.map((link) => link.flow)}
-        bookingId={id}
-        checklists={booking.checklists}
-      />
       <section className="section-card mt-6">
         <h2 className="text-base font-semibold text-slate-800">Booking lines</h2>
         <BookingLinesEditor
@@ -240,6 +235,11 @@ export default async function BookingPage({
           products={products}
         />
       </section>
+      <BookingChecklists
+        activeFlows={booking.checklistLinks.map((link) => link.flow)}
+        bookingId={id}
+        checklists={booking.checklists}
+      />
       <section className="section-card mt-6">
         <h2 className="text-base font-semibold text-slate-800">Totals</h2>
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">

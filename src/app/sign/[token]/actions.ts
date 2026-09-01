@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { addBookingActivity } from "@/lib/booking-service";
+import { markDropoffContractSigned } from "@/lib/checklists";
 import { parseContractSnapshot } from "@/lib/contract-snapshot";
 import { contractSnapshotPdfModel, renderContractPdf, storeContract } from "@/lib/contracts";
 import { createBookingCheckout, rentalAmountCents } from "@/lib/payment-service";
@@ -60,6 +61,7 @@ export async function agreeAndSign(formData: FormData) {
       },
     }),
   ]);
+  await markDropoffContractSigned({ bookingId: link.bookingId, signedAt });
   await addBookingActivity(
     link.bookingId,
     link.contract.generatedByUserId,

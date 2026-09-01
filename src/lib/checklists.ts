@@ -39,6 +39,32 @@ export async function ensureChecklist(bookingId: string, flow: ChecklistFlow) {
   });
 }
 
+export async function markDropoffContractSigned({
+  bookingId,
+  signedAt,
+}: {
+  bookingId: string;
+  signedAt: Date;
+}) {
+  const checklist = await ensureChecklist(bookingId, "DROPOFF");
+  if (checklist.status === "COMPLETED") return;
+
+  await prisma.$transaction([
+    prisma.bookingChecklistStep.updateMany({
+      where: {
+        checklistId: checklist.id,
+        stepKey: "contract-signed",
+        status: { not: "COMPLETED" },
+      },
+      data: { status: "COMPLETED", completedAt: signedAt },
+    }),
+    prisma.bookingChecklist.updateMany({
+      where: { id: checklist.id, currentStep: 0, status: { not: "COMPLETED" } },
+      data: { currentStep: 1, status: "IN_PROGRESS" },
+    }),
+  ]);
+}
+
 export async function createChecklistLink({
   bookingId,
   flow,
