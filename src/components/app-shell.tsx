@@ -1,7 +1,10 @@
 import Link from "next/link";
+import Image from "next/image";
 import { signOutAction } from "@/app/sign-out-action";
+import { requireWorkspaceUser } from "@/lib/auth";
 
 const nav = ["Dashboard", "Bookings", "Customers", "Catalog", "Contracts", "Settings"] as const;
+const adminOnlyNav = new Set<(typeof nav)[number]>(["Customers", "Catalog", "Settings"]);
 
 function NavigationIcon({ name }: Readonly<{ name: (typeof nav)[number] }>) {
   const common = {
@@ -59,10 +62,14 @@ function NavigationIcon({ name }: Readonly<{ name: (typeof nav)[number] }>) {
   );
 }
 
-export function AppShell({
+export async function AppShell({
   children,
   activeItem,
 }: Readonly<{ children: React.ReactNode; activeItem?: (typeof nav)[number] }>) {
+  const user = await requireWorkspaceUser();
+  const visibleNav =
+    user.membership.role === "ADMIN" ? nav : nav.filter((item) => !adminOnlyNav.has(item));
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <a
@@ -72,8 +79,21 @@ export function AppShell({
         Skip to main content
       </a>
       <aside className="hidden min-h-screen w-60 flex-col border-r border-slate-200/90 bg-white p-4 md:fixed md:flex">
-        <Link className="px-2 text-lg font-semibold tracking-tight text-slate-900" href="/">
-          Rental Booking
+        <Link
+          className="flex items-center gap-2 px-2 text-lg font-semibold tracking-tight text-slate-900"
+          href="/"
+        >
+          <span aria-hidden="true" className="relative size-9 overflow-hidden">
+            <Image
+              alt=""
+              className="absolute -left-[19px] -top-[10px] h-auto w-[74px] max-w-none"
+              height={1254}
+              priority
+              src="/brand/quiptal-logo.png"
+              width={1254}
+            />
+          </span>
+          Quiptal
         </Link>
         <form action="/search" className="mt-6 flex gap-2 px-2" method="get">
           <label className="sr-only" htmlFor="global-search">
@@ -95,7 +115,7 @@ export function AppShell({
           </button>
         </form>
         <nav aria-label="Main navigation" className="mt-10 space-y-1">
-          {nav.map((item) => (
+          {visibleNav.map((item) => (
             <Link
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${activeItem === item ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`}
               href={item === "Dashboard" ? "/" : `/${item.toLowerCase()}`}
@@ -112,9 +132,9 @@ export function AppShell({
               aria-hidden="true"
               className="flex size-8 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold text-white"
             >
-              A
+              {user.email.slice(0, 1).toUpperCase()}
             </span>
-            <span>Administrator</span>
+            <span className="truncate">{user.email}</span>
           </div>
           <form action={signOutAction}>
             <button
@@ -145,7 +165,7 @@ export function AppShell({
         aria-label="Mobile navigation"
         className="fixed inset-x-0 bottom-0 z-10 flex justify-around border-t border-slate-200 bg-white/95 p-2 backdrop-blur md:hidden"
       >
-        {nav.slice(0, 5).map((item) => (
+        {visibleNav.slice(0, 5).map((item) => (
           <Link
             className={`flex min-w-14 flex-col items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium ${activeItem === item ? "text-blue-700" : "text-slate-500"}`}
             href={item === "Dashboard" ? "/" : `/${item.toLowerCase()}`}

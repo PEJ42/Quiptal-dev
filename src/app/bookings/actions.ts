@@ -4,7 +4,12 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { addBookingActivity, recalculateBooking } from "@/lib/booking-service";
 import { bookingDate, bookingSchema } from "@/lib/booking-schema";
-import { requireBookingAccess, requireTeamAdmin, requireWorkspaceUser } from "@/lib/auth";
+import {
+  normalizeEmail,
+  requireBookingAccess,
+  requireTeamAdmin,
+  requireWorkspaceUser,
+} from "@/lib/auth";
 import { dollarsToCents } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { markContractsForResignature } from "@/lib/signing";
@@ -318,6 +323,46 @@ export async function updateBookingStatus(formData: FormData) {
   revalidatePath("/bookings");
 }
 
+export async function updateBookingDetails(formData: FormData) {
+  const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const { user } = await requireBookingAccess(bookingId);
+  const details = z
+    .object({
+      eventAddressLine1: z.string().trim().max(120),
+      eventAddressLine2: z.string().trim().max(120),
+      eventCity: z.string().trim().max(80),
+      eventRegion: z.string().trim().max(80),
+      eventPostalCode: z.string().trim().max(24),
+      eventCountry: z.string().trim().max(80),
+      notes: z.string().trim().max(5_000),
+    })
+    .parse({
+      eventAddressLine1: formData.get("eventAddressLine1") || "",
+      eventAddressLine2: formData.get("eventAddressLine2") || "",
+      eventCity: formData.get("eventCity") || "",
+      eventRegion: formData.get("eventRegion") || "",
+      eventPostalCode: formData.get("eventPostalCode") || "",
+      eventCountry: formData.get("eventCountry") || "",
+      notes: formData.get("notes") || "",
+    });
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: {
+      eventAddressLine1: details.eventAddressLine1 || null,
+      eventAddressLine2: details.eventAddressLine2 || null,
+      eventCity: details.eventCity || null,
+      eventRegion: details.eventRegion || null,
+      eventPostalCode: details.eventPostalCode || null,
+      eventCountry: details.eventCountry || null,
+      notes: details.notes || null,
+    },
+  });
+  await addBookingActivity(bookingId, user.id, "DETAILS_UPDATED", "Booking details updated");
+  revalidatePath(`/bookings/${bookingId}`);
+  revalidatePath("/bookings");
+  redirect(`/bookings/${bookingId}`);
+}
+
 export async function updateBookingPricing(formData: FormData) {
   const bookingId = z.string().cuid().parse(formData.get("bookingId"));
   const { user } = await requireBookingAccess(bookingId);
@@ -382,17 +427,27 @@ export async function assignBookingOwner(formData: FormData) {
   revalidatePath("/bookings");
 }
 
+async function requireBookingAccessManager(bookingId: string) {
+  const { user, booking } = await requireBookingAccess(bookingId);
+  const canManage =
+    user.membership.role === "ADMIN" ||
+    booking.createdByUserId === user.id ||
+    booking.ownerUserId === user.id;
+  if (!canManage || booking.teamId !== user.membership.teamId) redirect(`/bookings/${bookingId}`);
+  return { user, booking };
+}
+
 export async function addBookingMember(formData: FormData) {
-  const admin = await requireTeamAdmin();
   const bookingId = z.string().cuid().parse(formData.get("bookingId"));
   const userId = z.string().cuid().parse(formData.get("userId"));
+  const { booking: accessBooking } = await requireBookingAccessManager(bookingId);
   const [booking, membership] = await Promise.all([
     prisma.booking.findFirst({
-      where: { id: bookingId, teamId: admin.membership.teamId },
+      where: { id: bookingId, teamId: accessBooking.teamId },
       select: { id: true },
     }),
     prisma.teamMembership.findFirst({
-      where: { userId, teamId: admin.membership.teamId },
+      where: { userId, teamId: accessBooking.teamId! },
       select: { userId: true },
     }),
   ]);
@@ -405,15 +460,83 @@ export async function addBookingMember(formData: FormData) {
   revalidatePath(`/bookings/${bookingId}`);
 }
 
-export async function removeBookingMember(formData: FormData) {
-  const admin = await requireTeamAdmin();
+export type BookingOwnerActionState = { error?: string; message?: string };
+
+export async function addBookingOwnerAction(
+  _state: BookingOwnerActionState,
+  formData: FormData,
+): Promise<BookingOwnerActionState> {
+  const bookingId = z.string().cuid().safeParse(formData.get("bookingId"));
+  if (!bookingId.success) return { error: "This booking is not available." };
+  const { booking } = await requireBookingAccessManager(bookingId.data);
+  const userId = z.string().cuid().safeParse(formData.get("userId"));
+  const pendingEmail = String(formData.get("pendingEmail") || "").trim();
+
+  if (userId.success) {
+    if (booking.ownerUserId === userId.data)
+      return { error: "This person is already the primary owner." };
+    const membership = await prisma.teamMembership.findFirst({
+      where: { userId: userId.data, teamId: booking.teamId! },
+      select: { user: { select: { email: true } } },
+    });
+    if (!membership) return { error: "Choose a member of this workspace." };
+    await prisma.bookingMember.upsert({
+      where: { bookingId_userId: { bookingId: bookingId.data, userId: userId.data } },
+      update: {},
+      create: { bookingId: bookingId.data, userId: userId.data },
+    });
+    revalidatePath(`/bookings/${bookingId.data}`);
+    return { message: `${membership.user.email} can now access this booking.` };
+  }
+
+  const email = z.string().trim().pipe(z.email()).safeParse(pendingEmail);
+  if (!email.success) return { error: "Choose a team member or enter a valid email address." };
+  await prisma.pendingBookingUserEmail.upsert({
+    where: {
+      bookingId_normalizedEmail: {
+        bookingId: bookingId.data,
+        normalizedEmail: normalizeEmail(email.data),
+      },
+    },
+    update: {},
+    create: { bookingId: bookingId.data, normalizedEmail: normalizeEmail(email.data) },
+  });
+  revalidatePath(`/bookings/${bookingId.data}`);
+  return {
+    message: `${email.data} will gain access after creating an account or signing in with that email.`,
+  };
+}
+
+export async function promoteBookingOwner(formData: FormData) {
   const bookingId = z.string().cuid().parse(formData.get("bookingId"));
   const userId = z.string().cuid().parse(formData.get("userId"));
-  const booking = await prisma.booking.findFirst({
-    where: { id: bookingId, teamId: admin.membership.teamId },
+  const { booking, user } = await requireBookingAccessManager(bookingId);
+  const additionalOwner = await prisma.bookingMember.findFirst({
+    where: { bookingId, userId },
     select: { id: true },
   });
-  if (!booking) return;
+  if (!additionalOwner) return;
+  const previousOwnerId = booking.ownerUserId;
+  await prisma.$transaction(async (tx) => {
+    await tx.booking.update({ where: { id: bookingId }, data: { ownerUserId: userId } });
+    if (previousOwnerId && previousOwnerId !== userId) {
+      await tx.bookingMember.upsert({
+        where: { bookingId_userId: { bookingId, userId: previousOwnerId } },
+        update: {},
+        create: { bookingId, userId: previousOwnerId },
+      });
+    }
+    await tx.bookingMember.deleteMany({ where: { bookingId, userId } });
+  });
+  await addBookingActivity(bookingId, user.id, "OWNER_PROMOTED", "Booking primary owner updated");
+  revalidatePath(`/bookings/${bookingId}`);
+  revalidatePath("/bookings");
+}
+
+export async function removeBookingMember(formData: FormData) {
+  const bookingId = z.string().cuid().parse(formData.get("bookingId"));
+  const userId = z.string().cuid().parse(formData.get("userId"));
+  await requireBookingAccessManager(bookingId);
   await prisma.bookingMember.deleteMany({ where: { bookingId, userId } });
   revalidatePath(`/bookings/${bookingId}`);
 }

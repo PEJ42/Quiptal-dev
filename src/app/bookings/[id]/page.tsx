@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { BookingAccess } from "@/components/booking-access";
 import { BookingChecklists } from "@/components/booking-checklists";
+import { BookingDetails } from "@/components/booking-details";
 import { BookingLinesEditor } from "@/components/booking-lines-editor";
 import { bookingVisibilityWhere, requireWorkspaceUser } from "@/lib/auth";
 import { centsToDollars } from "@/lib/money";
@@ -18,9 +20,6 @@ import {
   revokeSigningLinks,
 } from "../financial-actions";
 import {
-  addBookingMember,
-  assignBookingOwner,
-  removeBookingMember,
   revertBookingToContractValues,
   updateBookingPricing,
   updateBookingStatus,
@@ -65,14 +64,17 @@ export default async function BookingPage({
     searchParams,
   ]);
   if (!booking) notFound();
-  const teamMembers =
-    user.membership.role === "ADMIN"
-      ? await prisma.teamMembership.findMany({
-          where: { teamId: user.membership.teamId },
-          include: { user: { select: { id: true, email: true } } },
-          orderBy: { joinedAt: "asc" },
-        })
-      : [];
+  const canManageBookingAccess =
+    user.membership.role === "ADMIN" ||
+    booking.createdByUserId === user.id ||
+    booking.ownerUserId === user.id;
+  const teamMembers = canManageBookingAccess
+    ? await prisma.teamMembership.findMany({
+        where: { teamId: user.membership.teamId },
+        include: { user: { select: { id: true, email: true } } },
+        orderBy: { joinedAt: "asc" },
+      })
+    : [];
   const replacementValue = replacementValueCents(booking.lines);
   const recommendedDeposit = recommendedSecurityDepositCents(booking.lines);
   const isAutomaticDeposit = booking.securityDepositOverrideCents === null;
@@ -80,6 +82,16 @@ export default async function BookingPage({
   const latestPayment = booking.payments[0];
   const savedCard = booking.savedPaymentMethods[0];
   const latestDeposit = booking.depositAuthorizations[0];
+  const billingSnapshot = [
+    booking.billingAddressLine1Snapshot,
+    booking.billingAddressLine2Snapshot,
+    booking.billingCitySnapshot,
+    booking.billingRegionSnapshot,
+    booking.billingPostalCodeSnapshot,
+    booking.billingCountrySnapshot,
+  ]
+    .filter(Boolean)
+    .join(", ");
   return (
     <AppShell activeItem="Bookings">
       <header className="page-header">
@@ -128,104 +140,29 @@ export default async function BookingPage({
                 : "Complete all earlier steps before confirming the checklist."}
         </p>
       )}
-      <section className="section-card mt-7 text-sm">
-        <h2 className="text-base font-semibold text-slate-800">Event and billing details</h2>
-        <p className="mt-2 text-slate-600">
-          Event:{" "}
-          {[
-            booking.eventAddressLine1,
-            booking.eventAddressLine2,
-            booking.eventCity,
-            booking.eventRegion,
-            booking.eventPostalCode,
-            booking.eventCountry,
-          ]
-            .filter(Boolean)
-            .join(", ") || "No event location saved."}
-        </p>
-        <p className="mt-2 text-slate-600">
-          Billing snapshot:{" "}
-          {[
-            booking.billingAddressLine1Snapshot,
-            booking.billingAddressLine2Snapshot,
-            booking.billingCitySnapshot,
-            booking.billingRegionSnapshot,
-            booking.billingPostalCodeSnapshot,
-            booking.billingCountrySnapshot,
-          ]
-            .filter(Boolean)
-            .join(", ") || "No billing address saved."}
-        </p>
-        {booking.notes && <p className="mt-2 text-slate-600">Notes: {booking.notes}</p>}
-      </section>
-      <section className="section-card mt-6">
-        <h2 className="text-base font-semibold text-slate-800">Booking access</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Owner: {booking.ownerUser?.email ?? "Unassigned"}
-        </p>
-        {booking.members.length > 0 && (
-          <p className="mt-1 text-sm text-slate-600">
-            Members: {booking.members.map((member) => member.user.email).join(", ")}
-          </p>
-        )}
-        {user.membership.role === "ADMIN" && (
-          <div className="mt-4 grid gap-3 sm:max-w-xl">
-            <form action={assignBookingOwner} className="flex flex-wrap items-end gap-2">
-              <input name="bookingId" type="hidden" value={id} />
-              <label className="grid gap-1 text-sm text-slate-700">
-                Owner
-                <select
-                  className="min-h-10 rounded-lg border border-slate-200 bg-white px-3"
-                  defaultValue={booking.ownerUserId ?? ""}
-                  name="ownerUserId"
-                >
-                  {teamMembers.map((membership) => (
-                    <option key={membership.userId} value={membership.userId}>
-                      {membership.user.email}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button className="secondary-button" type="submit">
-                Save owner
-              </button>
-            </form>
-            <form action={addBookingMember} className="flex flex-wrap items-end gap-2">
-              <input name="bookingId" type="hidden" value={id} />
-              <label className="grid gap-1 text-sm text-slate-700">
-                Add member
-                <select
-                  className="min-h-10 rounded-lg border border-slate-200 bg-white px-3"
-                  name="userId"
-                >
-                  {teamMembers.map((membership) => (
-                    <option key={membership.userId} value={membership.userId}>
-                      {membership.user.email}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button className="secondary-button" type="submit">
-                Add
-              </button>
-            </form>
-            {booking.members.map((member) => (
-              <form
-                action={removeBookingMember}
-                className="flex items-center gap-2 text-sm"
-                key={member.id}
-              >
-                <input name="bookingId" type="hidden" value={id} />
-                <input name="userId" type="hidden" value={member.userId} />
-                <span>{member.user.email}</span>
-                <button className="text-action text-red-700" type="submit">
-                  Remove
-                </button>
-              </form>
-            ))}
-          </div>
-        )}
-      </section>
+      <BookingDetails
+        billingSnapshot={billingSnapshot}
+        bookingId={id}
+        eventAddressLine1={booking.eventAddressLine1}
+        eventAddressLine2={booking.eventAddressLine2}
+        eventCity={booking.eventCity}
+        eventCountry={booking.eventCountry}
+        eventPostalCode={booking.eventPostalCode}
+        eventRegion={booking.eventRegion}
+        notes={booking.notes}
+      />
+      <BookingAccess
+        bookingId={id}
+        canManage={canManageBookingAccess}
+        members={booking.members.map((member) => ({ id: member.userId, email: member.user.email }))}
+        primaryOwner={
+          booking.ownerUser ? { id: booking.ownerUser.id, email: booking.ownerUser.email } : null
+        }
+        teamMembers={teamMembers.map((membership) => ({
+          id: membership.userId,
+          email: membership.user.email,
+        }))}
+      />
       <section className="section-card mt-6">
         <h2 className="text-base font-semibold text-slate-800">Booking lines</h2>
         <BookingLinesEditor
@@ -235,11 +172,6 @@ export default async function BookingPage({
           products={products}
         />
       </section>
-      <BookingChecklists
-        activeFlows={booking.checklistLinks.map((link) => link.flow)}
-        bookingId={id}
-        checklists={booking.checklists}
-      />
       <section className="section-card mt-6">
         <h2 className="text-base font-semibold text-slate-800">Totals</h2>
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
@@ -482,6 +414,11 @@ export default async function BookingPage({
           </form>
         )}
       </section>
+      <BookingChecklists
+        activeFlows={booking.checklistLinks.map((link) => link.flow)}
+        bookingId={id}
+        checklists={booking.checklists}
+      />
       <section className="section-card mt-6">
         <h2 className="text-base font-semibold text-slate-800">Activity</h2>
         <ul className="mt-3 space-y-2 text-sm">

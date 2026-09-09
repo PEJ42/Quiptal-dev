@@ -262,13 +262,16 @@ export function BookingChecklists({
   showLinkControls?: boolean;
 }>) {
   return (
-    <section className="section-card mt-6">
-      <div>
-        <h2 className="text-base font-semibold text-slate-800">Pickup & dropoff</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Complete each handoff step in order, or jump to any step when needed.
-        </p>
-      </div>
+    <details className="section-card mt-6" open>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+        <span>
+          <span className="block text-base font-semibold text-slate-800">Pickup & dropoff</span>
+          <span className="mt-1 block text-sm font-normal text-slate-600">
+            Complete each handoff step in order, or jump to any step when needed.
+          </span>
+        </span>
+        <span className="shrink-0 text-sm font-medium text-action">Collapse / expand</span>
+      </summary>
       <div className={`mt-5 grid gap-5 ${flows.length > 1 ? "xl:grid-cols-2" : "max-w-2xl"}`}>
         {flows.map((flow) => (
           <FlowChecklist
@@ -281,6 +284,6 @@ export function BookingChecklists({
           />
         ))}
       </div>
-    </section>
+    </details>
   );
 }
