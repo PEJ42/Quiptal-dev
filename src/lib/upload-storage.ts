@@ -6,6 +6,7 @@ import {
   catalogUploadsDirectory,
   checklistUploadsDirectory,
   companyLogosDirectory,
+  itemUploadsDirectory,
 } from "@/lib/app-storage";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -58,3 +59,21 @@ export async function saveCompanyLogo(file: File | null) {
 }
 
 export const companyLogoConstraints = "JPEG or PNG; maximum 2 MB.";
+
+const itemDocumentExtensions: Record<string, string> = {
+  "application/pdf": "pdf",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+};
+
+export async function saveItemDocument(file: File | null) {
+  if (!file || file.size === 0) return null;
+  const extension = itemDocumentExtensions[file.type];
+  if (!extension || file.size > 10 * 1024 * 1024) throw new Error("Invalid item document upload.");
+  const filename = `${randomUUID()}.${extension}`;
+  await mkdir(itemUploadsDirectory, { recursive: true });
+  await writeFile(`${itemUploadsDirectory}/${filename}`, Buffer.from(await file.arrayBuffer()));
+  return { filename, mimeType: file.type, originalFilename: file.name.slice(0, 255) };
+}
+
+export const itemDocumentConstraints = "PDF, JPEG, or PNG; maximum 10 MB each.";

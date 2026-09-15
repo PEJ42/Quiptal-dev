@@ -78,7 +78,30 @@ export default async function SearchPage({
         }),
       ])
     : ([[], [], [], []] as const);
-  const count = bookings.length + customers.length + products.length + bundles.length;
+  const items =
+    hasQuery && user.membership.role === "ADMIN"
+      ? await prisma.item.findMany({
+          where: {
+            teamId: user.membership.teamId,
+            OR: [
+              { name: { contains: q } },
+              { manufacturer: { contains: q } },
+              { model: { contains: q } },
+              { serialNumber: { contains: q } },
+              { assetNumber: { contains: q } },
+              { vendor: { contains: q } },
+              { notes: { contains: q } },
+              { product: { name: { contains: q } } },
+              { owner: { email: { contains: q } } },
+            ],
+          },
+          include: { owner: true, product: true },
+          orderBy: { name: "asc" },
+          take: maxResults,
+        })
+      : [];
+  const count =
+    bookings.length + customers.length + products.length + bundles.length + items.length;
 
   return (
     <AppShell>
@@ -95,7 +118,7 @@ export default async function SearchPage({
             defaultValue={q}
             id="search-page-query"
             name="q"
-            placeholder="Search bookings, customers, products, and bundles"
+            placeholder="Search bookings, customers, catalog, and items"
             type="search"
           />
           <button
@@ -108,7 +131,7 @@ export default async function SearchPage({
       </header>
       {!hasQuery ? (
         <p className="mt-8 text-sm text-slate-500">
-          Enter a booking number, customer name, email, product, or bundle to search internal
+          Enter a booking number, customer name, email, product, bundle, or item to search internal
           records.
         </p>
       ) : (
@@ -196,6 +219,27 @@ export default async function SearchPage({
                 <li className="px-5 py-4 text-sm text-slate-500">No matching bundles.</li>
               )}
             </ResultGroup>
+            {user.membership.role === "ADMIN" && (
+              <ResultGroup title="Items">
+                {items.length ? (
+                  items.map((item) => (
+                    <li key={item.id}>
+                      <Link
+                        className="block px-5 py-3 hover:bg-blue-50/50"
+                        href={`/items/${item.id}`}
+                      >
+                        <p className="font-semibold text-slate-900">{item.name}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {item.product?.name ?? "No linked product"} · {item.owner.email}
+                        </p>
+                      </Link>
+                    </li>
+                  ))
+                ) : (
+                  <li className="px-5 py-4 text-sm text-slate-500">No matching items.</li>
+                )}
+              </ResultGroup>
+            )}
           </div>
         </>
       )}

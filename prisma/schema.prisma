@@ -27,6 +27,7 @@ model User {
   completedChecklists    BookingChecklist[]     @relation("ChecklistCompletedBy")
   checklistLinksCreated  BookingChecklistLink[] @relation("ChecklistLinkCreatedBy")
   invitationsCreated TeamInvitation[]   @relation("InvitationCreator")
+  ownedItems         Item[]             @relation("ItemOwner")
   activeTeamId       String?
 }
 
@@ -38,6 +39,7 @@ model Team {
   memberships TeamMembership[]
   invitations TeamInvitation[]
   bookings    Booking[]
+  items       Item[]
 }
 
 model TeamMembership {
@@ -200,6 +202,7 @@ model Product {
   updatedAt            DateTime          @updatedAt
   category             ProductCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   bundleComponents     BundleComponent[]
+  items                Item[]
 
   @@index([categoryId])
   @@index([archivedAt])
@@ -231,6 +234,88 @@ model BundleComponent {
 
   @@unique([bundleId, displayOrder])
   @@index([productId])
+}
+
+model Item {
+  id                           String            @id @default(cuid())
+  teamId                       String
+  ownerId                      String
+  productId                    String?
+  name                         String
+  itemType                     String
+  category                     String?
+  manufacturer                 String?
+  model                        String?
+  serialNumber                 String?
+  assetNumber                  String?
+  notes                        String?
+  photoReference               String?
+  originalQuantity             Int               @default(1)
+  currentQuantity              Int               @default(1)
+  purchaseDate                 DateTime?
+  purchasePriceCents           Int?
+  vendor                       String?
+  purchaseSource               String?
+  purchaseCondition            String?
+  currentCondition             String?
+  shippingCostCents            Int               @default(0)
+  salesTaxCents                Int               @default(0)
+  otherFeesCents               Int               @default(0)
+  totalAcquisitionOverrideCents Int?
+  businessUsePercent           Int               @default(100)
+  accountingCategory           String?
+  purchaseNotes                String?
+  replacementValueCents        Int?
+  status                       String            @default("ACTIVE")
+  archiveReason                String?
+  archivedAt                   DateTime?
+  createdAt                    DateTime          @default(now())
+  updatedAt                    DateTime          @updatedAt
+  team                         Team              @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  owner                        User              @relation("ItemOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  product                      Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
+  documents                    ItemDocument[]
+  dispositions                 ItemDisposition[]
+
+  @@index([teamId, status])
+  @@index([ownerId])
+  @@index([productId])
+  @@index([serialNumber])
+  @@index([assetNumber])
+}
+
+model ItemDocument {
+  id               String   @id @default(cuid())
+  itemId           String
+  fileReference    String   @unique
+  originalFilename String
+  mimeType         String
+  documentType     String?
+  description      String?
+  processingStatus String   @default("NOT_PROCESSED")
+  uploadedAt       DateTime @default(now())
+  item             Item     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([itemId])
+}
+
+model ItemDisposition {
+  id                 String   @id @default(cuid())
+  itemId             String
+  type               String
+  quantity           Int      @default(1)
+  dispositionDate    DateTime
+  grossAmountCents   Int      @default(0)
+  sellingFeesCents   Int      @default(0)
+  shippingCostCents  Int      @default(0)
+  netAmountCents     Int      @default(0)
+  buyer              String?
+  platform           String?
+  notes              String?
+  createdAt          DateTime @default(now())
+  item               Item     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([itemId, dispositionDate])
 }
 
 model Booking {

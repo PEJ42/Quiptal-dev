@@ -3,8 +3,16 @@ import Image from "next/image";
 import { signOutAction } from "@/app/sign-out-action";
 import { requireWorkspaceUser } from "@/lib/auth";
 
-const nav = ["Dashboard", "Bookings", "Customers", "Catalog", "Contracts", "Settings"] as const;
-const adminOnlyNav = new Set<(typeof nav)[number]>(["Customers", "Catalog", "Settings"]);
+const nav = [
+  "Dashboard",
+  "Bookings",
+  "Customers",
+  "Catalog",
+  "Items",
+  "Contracts",
+  "Settings",
+] as const;
+const adminOnlyNav = new Set<(typeof nav)[number]>(["Customers", "Catalog", "Items", "Settings"]);
 
 function NavigationIcon({ name }: Readonly<{ name: (typeof nav)[number] }>) {
   const common = {
@@ -38,6 +46,12 @@ function NavigationIcon({ name }: Readonly<{ name: (typeof nav)[number] }>) {
     Catalog: (
       <>
         <path {...common} d="M4 5.5 12 3l8 2.5v13L12 21l-8-2.5zM12 3v18M4 5.5l8 2.5 8-2.5" />
+      </>
+    ),
+    Items: (
+      <>
+        <rect {...common} x="4" y="4" width="16" height="16" rx="2" />
+        <path {...common} d="M8 8h8M8 12h8M8 16h5" />
       </>
     ),
     Contracts: (
