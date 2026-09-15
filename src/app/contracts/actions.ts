@@ -11,6 +11,7 @@ import { companyLogosDirectory } from "@/lib/app-storage";
 import { contractTermsPlainText, sanitizeContractTerms } from "@/lib/contract-terms";
 import { hashContractSnapshot, type ContractSnapshot } from "@/lib/contract-snapshot";
 import { prisma } from "@/lib/prisma";
+import { PENDING_SIGNATURE_STATUS, SUPERSEDED_CONTRACT_STATUS } from "@/lib/signing";
 
 const address = (...parts: (string | null | undefined)[]) => parts.filter(Boolean).join(", ");
 
@@ -42,7 +43,6 @@ export async function generateContract(formData: FormData) {
     prisma.contractTemplate.findFirst({ where: { isActive: true }, orderBy: { version: "desc" } }),
   ]);
   if (!booking || !template) redirect(`/bookings/${bookingId}?error=contract`);
-  const version = (await prisma.generatedContract.count({ where: { bookingId } })) + 1;
   const logo = await companyLogo(settings?.logoReference);
   const lines = booking.lines.map((line) => {
     const componentReplacementValue = line.bundleComponentSnapshots.reduce(
@@ -135,26 +135,66 @@ export async function generateContract(formData: FormData) {
   };
   const bytes = await renderContractPdf(contractSnapshotPdfModel(snapshot, logo));
   const fileReference = await storeContract(bytes);
-  await prisma.generatedContract.create({
-    data: {
-      bookingId,
-      generatedByUserId: user.id,
-      templateId: template.id,
-      version,
-      templateTitleSnapshot: template.title,
-      legalTermsSnapshot: template.legalTerms,
-      footerTextSnapshot: template.footerText,
-      fileReference,
-      pricingSnapshotJson: JSON.stringify(snapshot),
-      contentHash: hashContractSnapshot(snapshot),
-      status: "AWAITING_SIGNATURE",
-    },
-  });
+  let generatedContract: { version: number } | null = null;
+  for (let attempt = 0; attempt < 3 && !generatedContract; attempt += 1) {
+    try {
+      generatedContract = await prisma.$transaction(async (tx) => {
+        const latest = await tx.generatedContract.aggregate({
+          where: { bookingId },
+          _max: { version: true },
+        });
+        const pendingContractIds = await tx.generatedContract.findMany({
+          where: {
+            bookingId,
+            status: { in: [PENDING_SIGNATURE_STATUS, "REQUIRES_RESIGNATURE", "GENERATED"] },
+          },
+          select: { id: true },
+        });
+        const now = new Date();
+        if (pendingContractIds.length) {
+          await tx.signingLink.updateMany({
+            where: {
+              contractId: { in: pendingContractIds.map((contract) => contract.id) },
+              revokedAt: null,
+            },
+            data: { revokedAt: now },
+          });
+          await tx.generatedContract.updateMany({
+            where: { id: { in: pendingContractIds.map((contract) => contract.id) } },
+            data: { status: SUPERSEDED_CONTRACT_STATUS, requiresResignature: false },
+          });
+        }
+        return tx.generatedContract.create({
+          data: {
+            bookingId,
+            generatedByUserId: user.id,
+            templateId: template.id,
+            version: (latest._max.version ?? 0) + 1,
+            templateTitleSnapshot: template.title,
+            legalTermsSnapshot: template.legalTerms,
+            footerTextSnapshot: template.footerText,
+            fileReference,
+            pricingSnapshotJson: JSON.stringify(snapshot),
+            contentHash: hashContractSnapshot(snapshot),
+            status: PENDING_SIGNATURE_STATUS,
+          },
+          select: { version: true },
+        });
+      });
+    } catch (error) {
+      const code =
+        typeof error === "object" && error !== null && "code" in error
+          ? String(error.code)
+          : undefined;
+      if (code !== "P2002" && code !== "P2034") throw error;
+    }
+  }
+  if (!generatedContract) throw new Error("Could not generate a new contract. Please try again.");
   await addBookingActivity(
     bookingId,
     user.id,
     "CONTRACT_GENERATED",
-    `Contract version ${version} generated`,
+    `Contract version ${generatedContract.version} generated`,
   );
   revalidatePath(`/bookings/${bookingId}`);
   revalidatePath("/contracts");

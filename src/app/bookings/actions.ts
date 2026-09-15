@@ -263,13 +263,17 @@ export async function revertBookingToContractValues(formData: FormData) {
   ]);
   await recalculateBooking(bookingId);
   await markContractsForResignature(bookingId);
-  await prisma.generatedContract.update({
-    where: { id: contractId },
-    data: {
-      requiresResignature: false,
-      status: contract.signature ? "SIGNED" : "AWAITING_SIGNATURE",
-    },
+  const latestContract = await prisma.generatedContract.findFirst({
+    where: { bookingId },
+    orderBy: { version: "desc" },
+    select: { id: true },
   });
+  if (latestContract?.id === contractId) {
+    await prisma.generatedContract.update({
+      where: { id: contractId },
+      data: { requiresResignature: false },
+    });
+  }
   await addBookingActivity(
     bookingId,
     user.id,

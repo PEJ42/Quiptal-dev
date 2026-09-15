@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { BookingAccess } from "@/components/booking-access";
 import { BookingChecklists } from "@/components/booking-checklists";
+import { CopyContractLinkButton } from "@/components/copy-contract-link-button";
 import { BookingDetails } from "@/components/booking-details";
 import { BookingLinesEditor } from "@/components/booking-lines-editor";
 import { bookingVisibilityWhere, requireWorkspaceUser } from "@/lib/auth";
@@ -13,7 +14,6 @@ import { generateContract } from "@/app/contracts/actions";
 import {
   authorizeBookingDeposit,
   captureBookingDeposit,
-  createCustomerSigningLink,
   createPaymentLink,
   refundBookingDeposit,
   releaseBookingDeposit,
@@ -30,7 +30,7 @@ export default async function BookingPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ signingLink?: string; error?: string; checklistError?: string }>;
+  searchParams: Promise<{ error?: string; checklistError?: string }>;
 }) {
   const { id } = await params;
   const user = await requireWorkspaceUser();
@@ -272,14 +272,25 @@ export default async function BookingPage({
                     className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                       contract.status === "SIGNED"
                         ? "bg-emerald-50 text-emerald-700"
-                        : "bg-amber-50 text-amber-700"
+                        : contract.status === "SUPERSEDED"
+                          ? "bg-slate-100 text-slate-600"
+                          : "bg-amber-50 text-amber-700"
                     }`}
                   >
-                    {contract.status === "SIGNED" ? "Signed" : "Pending signature"}
+                    {contract.status === "SIGNED"
+                      ? "Signed"
+                      : contract.status === "SUPERSEDED"
+                        ? "Superseded"
+                        : "Pending signature"}
                   </span>
                   <Link className="secondary-button" href={`/contracts/${contract.id}`}>
                     View contract
                   </Link>
+                  {contract.id === latestContract?.id &&
+                    contract.status === "AWAITING_SIGNATURE" &&
+                    !contract.requiresResignature && (
+                      <CopyContractLinkButton bookingId={id} contractId={contract.id} />
+                    )}
                   <form action={revertBookingToContractValues}>
                     <input name="bookingId" type="hidden" value={id} />
                     <input name="contractId" type="hidden" value={contract.id} />
@@ -297,24 +308,6 @@ export default async function BookingPage({
             ))
           )}
         </ul>
-        {latestContract && latestContract.status !== "SIGNED" && (
-          <form action={createCustomerSigningLink} className="mt-4 inline-block">
-            <input name="bookingId" type="hidden" value={id} />
-            <button className="secondary-button">Create signing link</button>
-          </form>
-        )}
-        {query.signingLink && (
-          <p className="mt-4 break-all rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
-            Customer signing link:{" "}
-            {`${process.env.APP_URL || "http://localhost:3000"}/sign/${query.signingLink}`}
-          </p>
-        )}
-        {latestContract && (
-          <p className="mt-3 text-sm text-slate-600">
-            Latest contract: {latestContract.status.replaceAll("_", " ").toLowerCase()}
-            {latestContract.requiresResignature ? " · Changes require a new signature." : ""}
-          </p>
-        )}
         <form action={revokeSigningLinks} className="mt-3 inline-block">
           <input name="bookingId" type="hidden" value={id} />
           <button className="text-action text-red-700">Revoke signing links</button>

@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { addBookingActivity } from "@/lib/booking-service";
 import {
@@ -17,26 +16,37 @@ import { createSigningLink } from "@/lib/signing";
 
 const bookingIdFrom = (formData: FormData) => z.string().cuid().parse(formData.get("bookingId"));
 
-export async function createCustomerSigningLink(formData: FormData) {
-  const bookingId = bookingIdFrom(formData);
-  const { user } = await requireBookingAccess(bookingId);
-  const contract = await prisma.generatedContract.findFirst({
-    where: {
+export type ContractLinkActionResult = { token?: string; error?: string };
+
+export async function copyContractSigningLink(
+  bookingId: string,
+  contractId: string,
+): Promise<ContractLinkActionResult> {
+  try {
+    z.string().cuid().parse(bookingId);
+    z.string().cuid().parse(contractId);
+    const { user } = await requireBookingAccess(bookingId);
+    const contract = await prisma.generatedContract.findFirst({
+      where: { id: contractId, bookingId },
+      select: { id: true, version: true },
+    });
+    if (!contract) return { error: "This contract is no longer available." };
+    const token = await createSigningLink(bookingId, contract.id);
+    await addBookingActivity(
       bookingId,
-      status: { in: ["AWAITING_SIGNATURE", "REQUIRES_RESIGNATURE"] },
-      requiresResignature: false,
-    },
-    orderBy: { version: "desc" },
-  });
-  if (!contract) redirect(`/bookings/${bookingId}?error=no-contract`);
-  const token = await createSigningLink(bookingId, contract.id);
-  await addBookingActivity(
-    bookingId,
-    user.id,
-    "SIGNING_LINK_CREATED",
-    `Signing link created for contract version ${contract.version}`,
-  );
-  redirect(`/bookings/${bookingId}?signingLink=${token}`);
+      user.id,
+      "SIGNING_LINK_CREATED",
+      `Signing link created for contract version ${contract.version}`,
+    );
+    return { token };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unable to create a signing link. Please try again.",
+    };
+  }
 }
 
 export async function revokeSigningLinks(formData: FormData) {
