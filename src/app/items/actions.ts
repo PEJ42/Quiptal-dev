@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
-import { dollarsToCents } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { saveItemDocument } from "@/lib/upload-storage";
 
@@ -17,13 +16,14 @@ function optionalText(value: FormDataEntryValue | null) {
 }
 
 function optionalCents(value: FormDataEntryValue | null) {
-  // People naturally paste values such as "$1,200.00". Store money as cents,
-  // but accept that normal display format at the form boundary.
-  const text = typeof value === "string" ? value.trim().replaceAll(",", "").replace(/^\$/, "") : "";
+  // Optional cost fields should never prevent an otherwise valid asset record
+  // from saving. Accept normal number-entry formats, including a currency sign,
+  // commas, leading zeroes, and browser-supported scientific notation.
+  const text =
+    typeof value === "string" ? value.trim().replaceAll(",", "").replaceAll("$", "") : "";
   if (!text) return null;
-  const cents = dollarsToCents(text);
-  if (typeof cents !== "number") throw new Error("Enter a valid dollar amount.");
-  return cents;
+  const amount = Number(text);
+  return Number.isFinite(amount) && amount >= 0 ? Math.round(amount * 100) : null;
 }
 
 function itemInput(formData: FormData) {
