@@ -17,7 +17,9 @@ function optionalText(value: FormDataEntryValue | null) {
 }
 
 function optionalCents(value: FormDataEntryValue | null) {
-  const text = typeof value === "string" ? value.trim() : "";
+  // People naturally paste values such as "$1,200.00". Store money as cents,
+  // but accept that normal display format at the form boundary.
+  const text = typeof value === "string" ? value.trim().replaceAll(",", "").replace(/^\$/, "") : "";
   if (!text) return null;
   const cents = dollarsToCents(text);
   if (typeof cents !== "number") throw new Error("Enter a valid dollar amount.");
